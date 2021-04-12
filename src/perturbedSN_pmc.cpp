@@ -74,12 +74,12 @@ PMC::PMC(arma::mat Y,
   // saveGam = mvrnormArma(K, gam_mu, gam_Sig).t();   
   
   // XX: This is inefficient because of needless copying. 
-  saveGam.set_size(J, K, R);
-  mat tmp = mvrnormArma(J*K, gam_mu, gam_Sig);  // to perform only one matrix inverse
+  saveGam.set_size(J, K-1, R);
+  mat tmp = mvrnormArma(J*(K-1), gam_mu, gam_Sig);  // to perform only one matrix inverse
   // Rcout << "tmp: " << tmp.n_rows << " x " << tmp.n_cols << "matrix" << endl;
   for (size_t j=0; j<J; j++)
-    for (size_t k=0; k<K; k++)
-      saveGam.tube(j, k) = tmp.row(K*j + k);
+    for (size_t m=0; m<(K-1); m++)
+      saveGam.tube(j, m) = tmp.row((K-1)*j + m);
 
 
   //   saveParticles = control$saveParticles
@@ -253,52 +253,73 @@ void PMC::main_loop(const Rcpp::List& prior, const Rcpp::List& initParticles,
 
 /* slow version (slow by necessity?) */
 // Polya-gamma data augmentation per 2021 Rigon Durante
+// saveGam is (J, K-1, R)
 void PMC::sampleGam() {
   
-  for(size_t j=0; j<J; j++) {
-    for (size_t k=0; k<(K-1); k++) {
+  for (size_t m=0; m<(K-1); m++) {
+
+    size_t levelm = floor(log2(m+1) * (1 + std::numeric_limits<double>::epsilon()));
+    size_t Km = K / pow(2, levelm);  // number of leafs under m
+    size_t lfl = (m+1) * Km - K;   // Subtract K to shift from K:(2K-1) to 0:(K-1)
+
+    for(size_t j=0; j<J; j++) {
       
-      uvec ij = arma::find(T>(k-1) && C==j);
-      uvec Tij = T(ij);
-      mat psiXij = psiX.rows(ij);  
+      uvec Cj_and_k_under_m = arma::find(lfl<=T && T<(lfl+Km) && C==j);
+      uvec Tij = T(Cj_and_k_under_m);
+      mat psiXij = psiX.rows(Cj_and_k_under_m);  
       
       // 1. Update PG data
-      vec gamtmp = saveGam.tube(j, k);  // Compiler wants me to store this before multiplying.
-      vec pgdat = rpg(ones<vec>(ij.size()), psiXij * gamtmp);
+      vec gamtmp = saveGam.tube(j, m);  // Compiler wants me to store this before multiplying.
+      vec pgdat = rpg(ones<vec>(Tij.size()), psiXij * gamtmp);
       
       // 2. Update gamma
-      vec kappa(ij.size());
+      vec kappa(Tij.size());
       kappa.fill(-0.5);
-      kappa(arma::find(Tij==k)).fill(0.5);
-      mat gam_Sigjk = arma::inv(psiXij.t() * diagmat(pgdat) * psiXij + gam_Sig_inv);
-      vec gam_mujk = gam_Sigjk * (psiXij.t() * kappa + gam_Sig_inv * gam_mu);
-      saveGam.tube(j, k) = mvrnormArma(1, gam_mujk, gam_Sigjk).t();
+      kappa(arma::find( Tij<(lfl+Km/2) )).fill(0.5);
+      mat gam_Sigjm = arma::inv(psiXij.t() * diagmat(pgdat) * psiXij + gam_Sig_inv);
+      vec gam_mujm = gam_Sigjm * (psiXij.t() * kappa + gam_Sig_inv * gam_mu);
+      saveGam.tube(j, m) = mvrnormArma(1, gam_mujm, gam_Sigjm).t();
       
     }
   }
 }
 
 
+// Returns log weights, which is a deterministic function of psiX and gam, 
+// so there's no sampling involved in this function. 
+// All of the sampling happens in sampleGam(). 
+// saveGam is (J, K-1, R)
+// logW is (n, K)
 void PMC::getLogWs(mat& logW) {
-  // Returns log weights, which is a deterministic function of psiX and gam, 
-  // so there's no sampling involved in this function. 
-  // All of the sampling happens in sampleGam(). 
   // Rcout << "start of PMC::getLogWs()" << endl;
   if (K==1) { 
-    logW.col(0).fill(1);
+    logW.col(0).ones();
     return;
-  }  // if (K==1) { return(ones<mat>(n, 1)); }  
+  }  
+  logW.zeros();
   
-  // Compute eta. Store eta in logW, which avoids a second (n,K) matrix. 
+  // Compute eta. 
+  mat eta(n, K-1);
   for (size_t j=0; j<J; j++) {
     uvec C_j = arma::find(C==j);
-    mat jGam = saveGam.row(j);  // (K, R)
-    logW.rows(C_j) = psiX.rows(C_j) * jGam.t();  // eta
+    mat jGam = saveGam.row(j);  // (K-1, R)
+    eta.rows(C_j) = psiX.rows(C_j) * jGam.t();  // (n_j, K-1)
   }
-  
-  // Compute logs.
-  logW -= cumsum(log(1 + exp(logW)), 1);
-  logW.col(K-1) = trunc_log(1 - sum(exp(logW.cols(0, K-2)), 1));
+
+  // Compute log weights. 
+  // Could probably do this more efficiently. Sth like:
+  // vec signs(K-1);  // elements are -1, 0, or 1
+  // set signs according to k;
+  // logW.col(k) -= sum(log(1 + exp(signs*eta.col(l))));
+  for (size_t k=0; k<K; k++) {
+    size_t l=k+K;  // root=1 index scheme
+    while (l > 1) {
+      int s = pow(-1, l%2 + 1);  // sign: want odd l to be 1; even l to be -1
+      l /= 2;
+      logW.col(k) -= log(1 + exp( s*eta.col(l-1) ));
+    }
+  }
+
 }
 
 

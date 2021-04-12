@@ -71,10 +71,10 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
       prior$merge_step = TRUE;
     if(is.null(prior$merge_par))
       prior$merge_par = 0.1;
-    if(is.null(prior$mu_gam))
+    if(is.null(prior$gam_mu))
       prior$gam_mu = rep(0, R);
-    if(is.null(prior$Sig_gam))
-      prior$gam_Sig = Matrix::diag(nrow=R);
+    if(is.null(prior$gam_Sig))
+      prior$gam_Sig = Matrix::diag(nrow=R)*(1000/R);
   }
   
   
@@ -97,11 +97,12 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
   }
   
   
-  # Using round() because even 2^log2(5) does not equal 5...
-  twolog2K = round(2^log2(prior$K))
-  if (prior$K != twolog2K) {
-    print("Warning: K will be set to the smallest power of 2 that is >= K")
-    prior$K = twolog2K
+  print("** start of K=2^x")
+  # rbind(1:16, sapply(1:16, function(K) 2^(floor(log2(K-0.1)) + 1)))
+  nextK = 2^(floor(log2(prior$K-0.1)) + 1)  # handle numerical approximations
+  if (prior$K != nextK) {
+    print(paste("K has been changed from", prior$K, "to next power-of-2:", nextK))
+    prior$K = nextK
   }
   
   if(is.null(state$t)) {
