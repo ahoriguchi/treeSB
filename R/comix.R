@@ -75,6 +75,8 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
       prior$gam_mu = rep(0, R);
     if(is.null(prior$gam_Sig))
       prior$gam_Sig = Matrix::diag(nrow=R)*(1000/R);
+    if(is.null(prior$treestr))
+      prior$treestr = 0;  # 0 is UT; 1 is BT
   }
   
   
@@ -96,13 +98,14 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
       pmc$ndisplay = 100
   }
   
-  
-  print("** start of K=2^x")
-  # rbind(1:16, sapply(1:16, function(K) 2^(floor(log2(K-0.1)) + 1)))
-  nextK = 2^(floor(log2(prior$K-0.1)) + 1)  # handle numerical approximations
-  if (prior$K != nextK) {
-    print(paste("K has been changed from", prior$K, "to next power-of-2:", nextK))
-    prior$K = nextK
+  if (prior$treestr == 1) {
+    print("** start of K=2^x")
+    # rbind(1:16, sapply(1:16, function(K) 2^(floor(log2(K-0.1)) + 1)))
+    nextK = 2^(floor(log2(prior$K-0.1)) + 1)  # handle numerical approximations
+    if (prior$K != nextK) {
+      print(paste("K has been changed from", prior$K, "to next power-of-2:", nextK))
+      prior$K = nextK
+    }
   }
   
   if(is.null(state$t)) {

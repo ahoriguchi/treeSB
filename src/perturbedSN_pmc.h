@@ -20,6 +20,7 @@ private:
   size_t R;         // number of covariate functions for weights
   int num_particles, num_iter, num_burnin, num_thin, num_display;   // number of iteration, burnin and thinning
   // int seed;         // initial random seed
+  size_t treestr;
   
   /* --- hyperparameters --- */
   int length_chain;
@@ -59,8 +60,10 @@ private:
   // arma::mat getWs();  
   
   void getLogWs(mat& logW);  
+  // void getLogWsUT(mat& logW);  
   
   void sampleGam();
+  // void sampleGamUT();
     
   Rcpp::List initialParticles();
   
