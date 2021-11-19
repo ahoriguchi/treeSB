@@ -7,29 +7,29 @@ using namespace arma;
 
 // [[Rcpp::export]]
 Rcpp::List perturbedSNcpp(arma::mat Y,
-                          arma::mat psiX,
-                          arma::uvec C,
-                          Rcpp::List prior,
-                          Rcpp::List pmc,
-                          Rcpp::List state,
-                          Rcpp::List initParticles, bool init)
+							arma::mat psiX,
+							arma::uvec C,
+							Rcpp::List prior,
+							Rcpp::List pmc,
+							Rcpp::List state,
+							Rcpp::List initParticles, bool init)
 {
-  Rcpp::RNGScope scope;  
-  PMC H(Y, psiX, C, prior, pmc, state, initParticles, init);
-  
-  List chain = H.get_chain();
-  
-  List data = Rcpp::List::create(  
-    Rcpp::Named( "Y" ) = Y,
-    Rcpp::Named( "psiX" ) = psiX,
-    Rcpp::Named( "C" ) = C
-  ) ; 
-  
-  return Rcpp::List::create(  
-    Rcpp::Named( "chain" ) = chain,
-    Rcpp::Named( "data" ) = data,
-    Rcpp::Named( "prior" ) = prior,
-    Rcpp::Named( "pmc" ) = pmc //,
-    // Rcpp::Named( "control" ) = control
-  ) ;    
+	Rcpp::RNGScope scope;  
+	PMC H(Y, psiX, C, prior, pmc, state, initParticles, init);
+	
+	List chain = H.get_chain();
+	
+	// List data = Rcpp::List::create(  
+	//   Rcpp::Named( "Y" ) = Y,
+	//   Rcpp::Named( "psiX" ) = psiX,
+	//   Rcpp::Named( "C" ) = C
+	// ) ; 
+	
+	return Rcpp::List::create(  
+		Rcpp::Named( "chain" ) = chain,
+		// Rcpp::Named( "data" ) = data,
+		Rcpp::Named( "prior" ) = prior,
+		Rcpp::Named( "pmc" ) = pmc //,
+		// Rcpp::Named( "control" ) = control
+	) ;    
 }

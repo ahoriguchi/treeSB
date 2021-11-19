@@ -26,8 +26,13 @@ private:
   int length_chain;
   vec tau_a;
   double e0;
+  mat Lamb, invLamb, cholLamb, cholInvLamb;
+  bool is_Lamb_Zero;
+  double ldLamb, sgnLamb;
   vec b0;
-  mat E0, invE0, B0, invB0;
+  // mat E0, invE0, B0, invB0;
+  mat E0, invE0, cholE0, cholInvE0, B0, invB0;
+  double ldE0, sgnE0;
   bool merge_step;
   double merge_par;
   double zeta;
@@ -45,7 +50,6 @@ private:
   cube saveXi, saveXi0, savePsi, saveAlpha, saveW;
   cube saveG, saveOmega, saveE;
   mat saveLog_py, savePerplexity;
-  vec saveA0;
   umat saveNResampled;
   // field<vec> saveGam;
 
@@ -53,17 +57,9 @@ private:
   void main_loop(const Rcpp::List& prior, const Rcpp::List& initParticles, 
                  bool init);
   
-  double sampleA0(double a0, const arma::umat& N, double a_par);
-  
-  // arma::mat sampleLogWs(const arma::umat& N, double a0);
-  
-  // arma::mat getWs();  
-  
   void getLogWs(mat& logW);  
-  // void getLogWsUT(mat& logW);  
   
   void sampleGam();
-  // void sampleGamUT();
     
   Rcpp::List initialParticles();
   

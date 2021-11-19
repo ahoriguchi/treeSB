@@ -8,12 +8,12 @@ Rcpp::List relabel(const Rcpp::List res)
   Rcpp::List chain = clone(Rcpp::as<Rcpp::List>(res["chain"]));
   Rcpp::List prior = Rcpp::as<Rcpp::List>(res["prior"]);
   int K = Rcpp::as<int>(prior["K"]);
-  Rcout << "K=" << K << endl;
+  Rcout << "K=" << K << "\t";
   umat t_relabel = Rcpp::as<umat>(chain["t"]);
   int T = t_relabel.n_rows;
-  Rcout << "T=" << T << endl;
+  Rcout << "T=" << T << "\t";
   int N = t_relabel.n_cols;
-  Rcout << "N=" << N << endl;
+  Rcout << "N=" << N << "\t";
   urowvec refZ = t_relabel.row(T-1);
   
   // Rcout << unique(t_relabel) << endl;
@@ -21,7 +21,7 @@ Rcpp::List relabel(const Rcpp::List res)
   cube W_relabel = Rcpp::as<cube>(chain["W"]);
   cube xi_relabel = Rcpp::as<cube>(chain["xi"]);
   int J = xi_relabel.n_rows;
-  Rcout << "J=" << J << endl;
+  Rcout << "J=" << J << "\t";
   int p = xi_relabel.n_cols / K;
   Rcout << "p=" << p << endl;
   cube xi0_relabel = Rcpp::as<cube>(chain["xi0"]);
@@ -160,7 +160,7 @@ Rcpp::List relabel(const Rcpp::List res)
     Rcpp::Named( "E" ) = E_relabel,
     // Rcpp::Named( "S" ) = S_relabel,
     // Rcpp::Named( "varphi" ) = Rcpp::as<vec>(chain["varphi"]),
-    Rcpp::Named( "a0" ) = Rcpp::as<vec>(chain["a0"]),
+    // Rcpp::Named( "a0" ) = Rcpp::as<vec>(chain["a0"]),
     Rcpp::Named( "log_py" ) = log_py_relabel,
     Rcpp::Named( "perplexity" ) = perplexity_relabel,
     Rcpp::Named( "nResampled" ) = nResampled_relabel,
