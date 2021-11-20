@@ -39,6 +39,7 @@ private:
   vec gam_mu;  // gamma R-variate-Normal mean 
   mat gam_Sig; // gamma R-variate-Normal Covariance 
   mat gam_Sig_inv; // inverse of gamma R-variate-Normal Covariance 
+  double m0;
   
   /* --- initial values --- */
   uvec T;
@@ -54,8 +55,7 @@ private:
   // field<vec> saveGam;
 
   /* --- functions --- */
-  void main_loop(const Rcpp::List& prior, const Rcpp::List& initParticles, 
-                 bool init);
+  void main_loop(const Rcpp::List& initParticles, bool init);
   
   void getLogWs(mat& logW);  
   
@@ -63,31 +63,25 @@ private:
     
   Rcpp::List initialParticles();
   
-  Rcpp::List sampleXi(const mat& Y_k, const uvec& C_k, uvec N_k, 
-                      Rcpp::List particles);
+  Rcpp::List sampleXi(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
   
-  Rcpp::List sampleG(const mat& Y_k, const uvec& C_k, uvec N_k, 
-                     Rcpp::List particles, Rcpp::List prior);
+  Rcpp::List sampleG(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
     
-  Rcpp::List samplePsi(const mat& Y_k, const uvec& C_k, uvec N_k, 
-                       Rcpp::List particles, Rcpp::List prior);
+  Rcpp::List samplePsi(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
   
   Rcpp::List sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List particles);
   
   Rcpp::List sampleXi0(const mat& Y_k, uvec N_k, Rcpp::List particles);
   
-  Rcpp::List sampleE(uvec N_k, Rcpp::List particles, Rcpp::List prior);
+  Rcpp::List sampleE(uvec N_k, Rcpp::List particles);
     
-  arma::vec logPriorDens(Rcpp::List particles, Rcpp::List prior);
+  arma::vec logPriorDens(Rcpp::List particles);
 
-  arma::vec logPostDens(const mat& Y_k, const uvec& C_k, uvec N_k,
-                        Rcpp::List particles, Rcpp::List prior);
+  arma::vec logPostDens(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
     
-  Rcpp::List iter(const uvec& T, int k, const umat& N, 
-                  Rcpp::List particles, arma::mat log_dQ, Rcpp::List prior);
+  Rcpp::List iter(const uvec& T, int k, const umat& N, Rcpp::List particles, arma::mat log_dQ);
 
-  arma::uvec sampleT(const arma::cube& xi, const arma::cube& Omega,
-                     const arma::mat& alpha, const arma::mat& logW);
+  arma::uvec sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW);
     
 public:
   // constructor 
