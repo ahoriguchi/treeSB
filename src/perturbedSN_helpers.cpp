@@ -220,9 +220,7 @@ public:
     }
 };
 
-double Eint( double xi,
-                         double om,
-                         double al ) {
+double Eint( double xi, double om, double al ) {
     
     SNlog2Phi f(xi, om, al);
     double err_est;

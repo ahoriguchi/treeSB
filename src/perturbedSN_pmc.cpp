@@ -173,7 +173,7 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
         
         for (size_t k=0; k<K; k++) {
 
-            Rcpp::List iterSummary = iter(T, k, N, all_particles);
+            Rcpp::List iterSummary = iter(k, N, all_particles);
             // all_particles[k] = Rcpp::as<Rcpp::List>(iterSummary["particles"]);
             Rcpp::List temp = all_particles[k];
             // Rcpp::List temp = all_particles["particles"];
@@ -198,7 +198,7 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
         }
         
         // Rcout << "** before sampleT()" << endl;
-        T = sampleT(xi, Omega, alpha, logW);
+        sampleT(xi, Omega, alpha, logW);
         // Rcout << "** after sampleT()" << endl;
         
         if( (it+1 > num_burnin) && ((it+1) % num_thin == 0))
@@ -328,7 +328,7 @@ void PMC::getLogWs(mat& logW) {
                 }
             }
 
-    } else if (treestr == 0) {  // UT
+    } else if (treestr == 0) {  // LT
 
         logW.tail_cols(K-1) = cumsum(-log(1 + exp(eta)), 1);
         logW.head_cols(K-1) -= log(1 + exp(-eta));
@@ -595,7 +595,8 @@ void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& 
         for ( iN=0; iN<num_particles; iN++) {
             g = inv_sympd(rWishartArma(invLamb, m0 ));
             G.row(iN) = vectorise(g).t();
-            log_dG(iN) = dIWishartArma(g, m0, Lamb);
+            log_dG(iN) = dIWishartArmaHelp(g, m0, Lamb, true, ldLamb, sgnLamb);
+            // log_dG(iN) = dIWishartArma(g, m0, Lamb);
         }
         // Rcout << "end empty G" << endl;
     } else { // if nk>0
@@ -638,7 +639,7 @@ void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& 
 }
 
 
-void PMC::samplePsi(const  mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     
     int nk = Y_k.n_rows;
     int p = Y_k.n_cols;
@@ -666,17 +667,6 @@ void PMC::samplePsi(const  mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::Lis
             
             double r = norm(x);
             double u = randu();
-            // // sample from Sigma prior (take psi*psi element here to be zero)
-            // mat Lambda = Rcpp::as<mat>(prior["Lambda"]);
-            // mat g = inv_sympd(rWishartArma(inv_sympd(Lambda), m ));
-            // rowvec h = sqrt(g.diag().t());
-            // mat invD = inv(diagmat(h));
-            // double detOmega =  det(invD * g * invD);
-        
-            // vec delta = pow(u, 1/p) * (1 / r) * pow(detOmega, p/2) * x;
-            // psi.row(iN) = trans( diagmat(h) * delta );
-            // double logSphere = (p/2.0) * log(M_PI) - lgamma(p/2.0+1.0);
-            // log_dpsi(iN) = 1 / (logSphere * log(detOmega));
 
             if (false) {
                 // sample from Sigma prior (take psi*psi element here to be zero)
@@ -847,7 +837,8 @@ void PMC::sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp
             // mat e = inv_sympd(rWishartArma( inv_sympd(E0), e0 ));
             mat e = inv_sympd(rWishartArma( invE0, e0 ));
             E.row(iN) = vectorise(e).t();
-            log_dE(iN) = dIWishartArma(e, e0, E0);
+            log_dE(iN) = dIWishartArmaHelp(e, e0, E0, true, ldE0, sgnE0);
+            // log_dE(iN) = dIWishartArma(e, e0, E0);
         }
         // Rcout << "end empty E" << endl;
     } else { // if nk>0
@@ -913,13 +904,13 @@ arma::vec PMC::logPriorDens( Rcpp::List& particles ) {
 
         // logPriorE(iN) = dIWishartArma(tempE, e0, E0, true, false, "tempE", "E0");
         // logPriorE(iN) = dIWishartArmaWithlds(tempE, e0, E0, true, false, "tempE", "E0", ldE0, sgnE0);
-        logPriorE(iN) = dIWishartArma(tempE, e0, E0);
+        logPriorE(iN) = dIWishartArmaHelp(tempE, e0, E0, true, ldE0, sgnE0);
         if (m0==0) {
             logPriorG(iN) = -((p+1.0)/2.0) * logDetSigma(iN);
         } else {
             // logPriorG(iN) = dIWishartArma(Sigma, m, Lamb, true, false, "Sigma", "Lamb");
             // logPriorG(iN) = dIWishartArmaWithlds(Sigma, m, Lamb, true, false, "Sigma", "Lamb", ldLamb, sgnLamb);
-            logPriorG(iN) = dIWishartArma(Sigma, m0, Lamb);
+            logPriorG(iN) = dIWishartArmaHelp(Sigma, m0, Lamb, true, ldLamb, sgnLamb);
         }
     }
 
@@ -1040,7 +1031,7 @@ arma::vec PMC::logPostDens( const mat& Y_k, const uvec& C_k, const uvec& N_k,
     return log_pi;
 }
 
-Rcpp::List PMC::iter(const uvec& T, size_t k, const umat& N, Rcpp::List& all_particles) {
+Rcpp::List PMC::iter(size_t k, const umat& N, Rcpp::List& all_particles) {
     
     uvec T_k = arma::find(T==k);
     mat Y_k = Y.rows(T_k);
@@ -1186,10 +1177,7 @@ Rcpp::List PMC::iter(const uvec& T, size_t k, const umat& N, Rcpp::List& all_par
         Rcpp::Named( "perplexity" ) = perplexity  );
 }
 
-arma::uvec PMC::sampleT(const arma::cube& xi,
-                                                const arma::cube& Omega,
-                                                const arma::mat&  alpha,
-                                                const arma::mat&  logW)
+void PMC::sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW)
 {
     // Rcout << "start of sampleT()" << endl;
     mat PT(n, K);
@@ -1206,40 +1194,20 @@ arma::uvec PMC::sampleT(const arma::cube& xi,
     }
     PT %= exp(logW);
     
-    uvec T(n);
     NumericVector U = runif(n);
+#pragma omp parallel for
     for (size_t i=0; i<n; i++) {
-        vec prob = PT.row(i).t();
-        vec probsum = cumsum(prob);
-        double x = U(i) * sum(prob);
+        // vec prob = PT.row(i).t();
+        vec probsum = cumsum(PT.row(i).t());
+        double x = U(i) * probsum.back();
         
         size_t k=0;
         while (k<(K-1) && probsum(k)<x) { k++; }
         T(i) = k;
     }
 
-    return(T);
 }
 
-// for (k=0; k<K; k++) {
-//   Rcout << "start of k-for loop" << endl;
-//   uvec k_idx(1);  // replace with PT.submat(C_j, span(k))?
-//   k_idx(0) = k;
-//   for (j=0; j<J; j++) {
-//     Rcout << "start of j-for loop" << endl;
-//     C_j = arma::find(C==j);
-//     // vec tmpGam = saveGam.tube(j, k);  // conv_to<colvec>::from()
-//     // Rcout << "tmpGam.size(): " << tmpGam.size() << endl;
-//     // mat tp = psiX.rows(C_j);
-//     // Rcout << "tp: " << tp.n_rows << " x " << tp.n_cols << " matrix" << endl;
-//     // vec wvec = psiX.rows(C_j) * tmpGam;  // weights
-//     // Rcout << "wvec.size(): " << wvec.size() << endl;
-//     PT.submat(C_j, k_idx) = dmsnArma(Y.rows(C_j),  // exp(logW(j,k))
-//                                      xi.slice(k).row(j),
-//                                      Omega.slice(k), // scalar multiplication
-//                                      alpha.col(k)) * 0.5;
-//   }
-// }
 
 
 //--------------------------------------------------------

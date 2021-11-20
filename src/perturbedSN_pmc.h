@@ -81,7 +81,7 @@ private:
     
   Rcpp::List iter(const uvec& T, size_t k, const umat& N, Rcpp::List& all_particles);
 
-  arma::uvec sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW);
+  void sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW);
     
 public:
   // constructor 
