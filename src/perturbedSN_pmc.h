@@ -63,23 +63,23 @@ private:
     
   Rcpp::List initialParticles();
   
-  Rcpp::List sampleXi(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
+  void sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
   
-  Rcpp::List sampleG(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
+  void sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
     
-  Rcpp::List samplePsi(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
+  void samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
   
-  Rcpp::List sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List particles);
+  void sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
   
-  Rcpp::List sampleXi0(const mat& Y_k, uvec N_k, Rcpp::List particles);
+  void sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
   
-  Rcpp::List sampleE(uvec N_k, Rcpp::List particles);
+  void sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
     
-  arma::vec logPriorDens(Rcpp::List particles);
+  arma::vec logPriorDens(Rcpp::List& particles);
 
-  arma::vec logPostDens(const mat& Y_k, const uvec& C_k, uvec N_k, Rcpp::List particles);
+  arma::vec logPostDens(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles);
     
-  Rcpp::List iter(const uvec& T, int k, const umat& N, Rcpp::List particles, arma::mat log_dQ);
+  Rcpp::List iter(const uvec& T, size_t k, const umat& N, Rcpp::List& all_particles);
 
   arma::uvec sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW);
     

@@ -123,8 +123,8 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
     mat alpha(p,K);
     rowvec z(n);
 
-    mat log_dQ(num_particles, 8);
-    log_dQ.fill(0);
+    // mat log_dQ(num_particles, 8);
+    // log_dQ.fill(0);
     vec log_py(K);
     vec perplexity(K);
     uvec nResampled(K);
@@ -172,12 +172,11 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
         getLogWs(logW);
         
         for (size_t k=0; k<K; k++) {
-            Rcpp::List iterSummary = iter( T, k, N, all_particles[k], log_dQ, //varphi, 
-                                                                         prior);
 
-            all_particles[k] = Rcpp::as<Rcpp::List>(iterSummary["particles"]);
-            
+            Rcpp::List iterSummary = iter(T, k, N, all_particles);
+            // all_particles[k] = Rcpp::as<Rcpp::List>(iterSummary["particles"]);
             Rcpp::List temp = all_particles[k];
+            // Rcpp::List temp = all_particles["particles"];
             
             xi.slice(k) = mean(Rcpp::as<cube>(temp["xi"]), 2);
             xi0.col(k) = mean(Rcpp::as<mat>(temp["xi0"]),0).t();
@@ -294,34 +293,6 @@ void PMC::sampleGam() {
     
 }
 
-// /* slow version (slow by necessity?) */
-// // Polya-gamma data augmentation per 2021 Rigon Durante
-// // saveGam is (J, K-1, R)
-// void PMC::sampleGamUT() {
-    
-//   for (size_t k=0; k<K-1; k++) {
-//     for(size_t j=0; j<J; j++) {
-            
-//       uvec ij = arma::find(T>=k && C==j);
-//       uvec Tij = T(ij);
-//       mat psiXij = psiX.rows(ij);  
-            
-//       // 1. Update PG data
-//       vec gamtmp = saveGam.tube(j, k);  // Compiler wants me to store this before multiplying.
-//       vec pgdat = rpg(ones<vec>(Tij.size()), psiXij * gamtmp);
-            
-//       // 2. Update gamma
-//       vec kappa(Tij.size());
-//       kappa.fill(-0.5);
-//       kappa(arma::find( Tij==k )).fill(0.5);
-//       mat gam_Sigjk = arma::inv(psiXij.t() * diagmat(pgdat) * psiXij + gam_Sig_inv);
-//       vec gam_mujk = gam_Sigjk * (psiXij.t() * kappa + gam_Sig_inv * gam_mu);
-//       saveGam.tube(j, k) = mvrnormArma(1, gam_mujk, gam_Sigjk).t();
-            
-//     }
-//   }
-// }
-
 
 // Returns log weights, which is a deterministic function of psiX and gam, 
 // so there's no sampling involved in this function. 
@@ -369,77 +340,7 @@ void PMC::getLogWs(mat& logW) {
 }
 
 
-// // Returns log weights, which is a deterministic function of psiX and gam, 
-// // so there's no sampling involved in this function. 
-// // All of the sampling happens in sampleGam(). 
-// // saveGam is (J, K-1, R)
-// // logW is (n, K)
-// void PMC::getLogWsUT(mat& logW) {
-//   // Rcout << "start of PMC::getLogWs()" << endl;
-//   logW.zeros();
-//   if (K==1) { return; }  
-    
-//   // Compute eta. 
-//   mat eta(n, K-1);
-//   for (size_t j=0; j<J; j++) {
-//     uvec C_j = arma::find(C==j);
-//     mat jGam = saveGam.row(j);  // (K-1, R)
-//     eta.rows(C_j) = psiX.rows(C_j) * jGam.t();  // (n_j, K-1)
-//   }
 
-//   logW.tail_cols(K-1) = cumsum(-log(1 + exp(eta)), 1);
-//   logW.head_cols(K-1) -= log(1 + exp(-eta));
-//   // for (size_t k=1; k<K; k++) { logW.col(k) += tmp(k-1); }
-
-// }
-
-
-// Compute logs. Reuse logW to sidestep create/copy of a second (n,K) matrix. 
-// for (int k=(K-2); k>=0; k--) 
-//   logW.col(k) = logW.col(k) - sum(log(1 + exp(logW.cols(0, k))), 1); 
-
-// Reuse logW to sidestep creation (and copying) of a second (n,K) matrix. 
-// Use k-1 instead of k to avoid size_t wraparound: 0-> 18446744073709551615.
-// vec v = ones<vec>(n);
-// for (size_t k=(K-1); k>0; k--)  
-//   for (size_t l=0; l<=(k-1); l++) 
-//     logW.col(k-1) = logW.col(k-1) - log(1 + exp(logW.col(l)));  
-// 
-// 
-// vec logsum = sum(log(1 + exp(logW.cols(0, k))), 1);
-
-
-
-
-
-// arma::mat PMC::getWs() {
-//   // Returns weights, which is a deterministic function of psiX and gam, 
-//   // so there's no sampling involved in this function. 
-//   // All of the sampling happens in gam. 
-//   Rcout << "start of PMC::getWs()" << endl;
-//   
-//   // Rcout << "start of eta" << endl;
-//   mat W(n, K);
-//   for (size_t j=0; j<J; j++) {
-//     uvec jrows = arma::find(C==j);
-//     mat jGam = saveGam.row(j);
-//     W.rows(jrows) = psiX.rows(jrows) * jGam.t();  // eta
-//   }
-//   
-//   // What's the most computationally-stable way to compute logistic function?
-//   // Rcout << "start of logit" << endl;
-//   // W = exp(W / (ones<mat>(n, K) + W));  // logit^{-1}(eta)
-//   W = ones<mat>(n, K) / (ones<mat>(n, K) + exp(-W));  // logit^{-1}(eta)
-//   
-//   // Break sticks. Sidesteps creation (and copying) of a second (n,K) matrix. 
-//   // Rcout << "start of stick-breaking" << endl;
-//   vec v = ones<vec>(n);
-//   for (size_t k=(K-1); k>0; k--)  
-//     for (size_t l=0; l<k; l++) 
-//       W.col(k) = W.col(k) % (v - W.col(l));  // Can do notation shorthand? 
-//   
-//   return(W);
-// }
 
 
 
@@ -588,21 +489,18 @@ Rcpp::List PMC::initialParticles() {
 }
 
 
-Rcpp::List PMC::sampleXi(const mat& Y_k, const uvec& C_k, uvec N_k, 
-                                                 Rcpp::List particles) {
+void PMC::sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     // Given the arguments, this function returns a population of MC draws 
     // for the values of the variable Xi, in the p-variate skew-N model.
     int nk = Y_k.n_rows;
 
-    // uvec S = Rcpp::as<umat>(particles["S"]);
     mat z = Rcpp::as<mat>(particles["z"]);
     mat psi = Rcpp::as<mat>(particles["psi"]);
     mat G = Rcpp::as<mat>(particles["G"]);
     mat E = Rcpp::as<mat>(particles["E"]);
     mat xi0 = Rcpp::as<mat>(particles["xi0"]);
     
-    cube xi(J, p, num_particles);
-    xi.fill(0);
+    cube xi(J, p, num_particles, fill::zeros);
     mat log_dxi(num_particles, J);
     
     if(nk == 0) {
@@ -668,15 +566,13 @@ Rcpp::List PMC::sampleXi(const mat& Y_k, const uvec& C_k, uvec N_k,
     } // end nk>0 loop
     
     vec vec_log_dxi = sum(log_dxi, 1);
+
+    particles["xi"] = xi;
+    log_dQ.col(pp) = vec_log_dxi;
     
-    return Rcpp::List::create(
-        Rcpp::Named( "xi" ) = xi,
-        Rcpp::Named( "log_dq" ) = vec_log_dxi
-    );
 }
 
-Rcpp::List PMC::sampleG(const  mat& Y_k, const uvec& C_k, uvec N_k,
-                                                Rcpp::List particles) {
+void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     
     int nk = Y_k.n_rows;
     
@@ -730,21 +626,19 @@ Rcpp::List PMC::sampleG(const  mat& Y_k, const uvec& C_k, uvec N_k,
             else
                 Lambda_k = invLamb + zeta * Sk;
             
-            g = inv_sympd(rWishartArma(inv_sympd(Lambda_k), ceil(zeta * nk) + m ));
+            g = inv_sympd(rWishartArma(inv_sympd(Lambda_k), ceil(zeta * nk) + m0 ));
             G.row(iN) = vectorise(g).t();
             log_dG(iN) = dIWishartArma(g, nk+m0, Lambda_k);
             // log_dG(iN) = dIWishartArma(g, zeta*nk+m, Lambda_k);
         }
     }
-    
-    return Rcpp::List::create(  
-        Rcpp::Named( "G" ) = G,
-        Rcpp::Named( "log_dq" ) = log_dG  );
+
+    particles["G"] = G;
+    log_dQ.col(pp) = log_dG;
 }
 
 
-Rcpp::List PMC::samplePsi(const  mat& Y_k, const uvec& C_k, uvec N_k, 
-                                                    Rcpp::List particles) {
+void PMC::samplePsi(const  mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     
     int nk = Y_k.n_rows;
     int p = Y_k.n_cols;
@@ -836,15 +730,13 @@ Rcpp::List PMC::samplePsi(const  mat& Y_k, const uvec& C_k, uvec N_k,
                                                                 inv_sympd(vpsi) ));
         } // end iN (particles) loop
     } // end nk>0 if
-    
-    return Rcpp::List::create(  
-        Rcpp::Named( "psi" ) = psi,
-        Rcpp::Named( "log_dq" ) = log_dpsi
-    );
+
+    particles["psi"] = psi;
+    log_dQ.col(pp) = log_dpsi;
     
 }
 
-Rcpp::List PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List particles ) {
+void PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     
     int nk = Y_k.n_rows;
     vec log_dZ(num_particles);
@@ -888,15 +780,14 @@ Rcpp::List PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List particles ) 
             log_dZ(ip) = accu( ldZ - tp - log(2) );
         }
     }
+
+    particles["z"] = z;
+    log_dQ.col(pp) = log_dZ;
     
-    return Rcpp::List::create(
-        Rcpp::Named( "z" ) = z,
-        Rcpp::Named( "log_dq" ) = log_dZ
-    );
 }
 
 
-Rcpp::List PMC::sampleXi0(const mat& Y_k, uvec N_k, Rcpp::List particles) {
+void PMC::sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     int nk = Y_k.n_rows;
 
     mat psi = Rcpp::as<mat>(particles["psi"]);
@@ -911,9 +802,7 @@ Rcpp::List PMC::sampleXi0(const mat& Y_k, uvec N_k, Rcpp::List particles) {
     
     if(nk == 0) {
         xi0 = mvrnormArma(num_particles, b0, B0);
-        log_dxi0 =  dmvnrm_arma_precision(xi0,
-                                                                            b0.t(),
-                                                                            invB0 );
+        log_dxi0 =  dmvnrm_arma_precision(xi0, b0.t(), invB0 );
     } else { // if nk>0:
         for ( int iN=0; iN<num_particles; iN++ ) {
             vec mxi0(p);
@@ -935,14 +824,14 @@ Rcpp::List PMC::sampleXi0(const mat& Y_k, uvec N_k, Rcpp::List particles) {
                                                                     inv_vxi0 ) );
         } // end iN (particles) loop
     } // end nk>0 loop
-    
-    return Rcpp::List::create(
-        Rcpp::Named( "xi0" ) = xi0,
-        Rcpp::Named( "log_dq" ) = log_dxi0
-    );
+
+
+    particles["xi0"] = xi0;
+    log_dQ.col(pp) = log_dxi0;
+
 }
 
-Rcpp::List PMC::sampleE(uvec N_k, Rcpp::List particles) {
+void PMC::sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
     
     int nk = accu(N_k);
     
@@ -974,16 +863,16 @@ Rcpp::List PMC::sampleE(uvec N_k, Rcpp::List particles) {
             log_dE(iN) = dIWishartArma(e, ek, mEinv);
         }
     }
-        
-    return Rcpp::List::create(  
-        Rcpp::Named( "E" ) = E,
-        Rcpp::Named( "log_dq" ) = log_dE  );
+
+    particles["E"] = E;
+    log_dQ.col(pp) = log_dE;
+
 }
 
 
 // ----------------------------------------------------------------------------------
 
-arma::vec PMC::logPriorDens( Rcpp::List particles ) {
+arma::vec PMC::logPriorDens( Rcpp::List& particles ) {
 
     cube xi = Rcpp::as<cube>(particles["xi"]);
     mat xi0 = Rcpp::as<mat>(particles["xi0"]);
@@ -1102,8 +991,8 @@ arma::vec PMC::logPriorDens( Rcpp::List particles ) {
 //     return(log_pi);
 // }
 
-arma::vec PMC::logPostDens( const mat& Y_k, const uvec& C_k, uvec N_k,
-                                                        Rcpp::List particles) {
+arma::vec PMC::logPostDens( const mat& Y_k, const uvec& C_k, const uvec& N_k,
+                                                        Rcpp::List& particles) {
     size_t nk = Y_k.n_rows;
     vec log_lik(num_particles, fill::zeros);  // loglikelihood.fill(0);
 
@@ -1151,69 +1040,82 @@ arma::vec PMC::logPostDens( const mat& Y_k, const uvec& C_k, uvec N_k,
     return log_pi;
 }
 
-Rcpp::List PMC::iter(const uvec& T,
-                                         int k,
-                                         const umat& N,
-                                         Rcpp::List particles,
-                                         mat log_dQ) {
+Rcpp::List PMC::iter(const uvec& T, size_t k, const umat& N, Rcpp::List& all_particles) {
     
     uvec T_k = arma::find(T==k);
     mat Y_k = Y.rows(T_k);
     uvec C_k = C(T_k);
+    Rcpp::List particles = all_particles[k];
     
-    int nk = Y_k.n_rows;
+    size_t nk = Y_k.n_rows;
+
+    mat log_dQ(num_particles, 8, fill::zeros);
+    sampleZ(Y_k, C_k, particles, log_dQ, 1);  // drawList = sampleZ(Y_k, C_k, particles);
+
+    uvec parPerm = randsamp(5,3,7);  
+    uvec N_k = N.col(k);  // so that I can pass by reference in the sampleXX() functions
+    // Rcout << "**iter(): before sample loop" << endl;
+    for (size_t pp : parPerm) {  
+        switch (pp) {
+            case 3: sampleXi(Y_k, C_k, N_k, particles, log_dQ, pp); break;
+            case 4: sampleG(Y_k, C_k, N_k, particles, log_dQ, pp); break;
+            case 5: samplePsi(Y_k, C_k, N_k, particles, log_dQ, pp); break;
+            case 6: sampleXi0(Y_k, N_k, particles, log_dQ, pp); break;
+            case 7: sampleE(N_k, particles, log_dQ, pp); break;
+        }
+    }
 
     // Proposal step (with permuted sweeps):
 
-    List drawList;
-    // Rcout << "start z" << endl;
-    drawList = sampleZ(Y_k, C_k, particles);
-    particles["z"] = Rcpp::as<mat>(drawList["z"]);
-    log_dQ.col(1) = Rcpp::as<vec>(drawList["log_dq"]);
-    // Rcout << "end z" << endl;
+    // List drawList;
+    // // Rcout << "start z" << endl;
+    // drawList = sampleZ(Y_k, C_k, particles);
+    // particles["z"] = Rcpp::as<mat>(drawList["z"]);
+    // log_dQ.col(1) = Rcpp::as<vec>(drawList["log_dq"]);
+    // // Rcout << "end z" << endl;
 
-    uvec parPerm = randsamp(5,3,7);
-    // Rcout << "randsamp" << parPerm << endl;
+    // uvec parPerm = randsamp(5,3,7);
+    // // Rcout << "randsamp" << parPerm << endl;
 
-    for(int ipar=0; ipar<5; ipar++) {
-        switch ( parPerm(ipar) ) {
-        case 3:
-            // Rcout << "start xi" << endl;
-            drawList = sampleXi( Y_k, C_k, N.col(k), particles);
-            particles["xi"] = Rcpp::as<cube>(drawList["xi"]);
-            log_dQ.col(3) = Rcpp::as<vec>(drawList["log_dq"]);
-            // Rcout << "end xi" << endl;
-            break;
-        case 4:
-            // Rcout << "start G" << endl;
-            drawList = sampleG(Y_k, C_k, N.col(k), particles);
-            particles["G"] = Rcpp::as<mat>(drawList["G"]);
-            log_dQ.col(4) = Rcpp::as<vec>(drawList["log_dq"]);
-            // Rcout << "end G" << endl;
-            break;
-        case 5:
-            // Rcout << "start psi" << endl;
-            drawList = samplePsi( Y_k, C_k, N.col(k), particles);
-            particles["psi"] = Rcpp::as<mat>(drawList["psi"]);
-            log_dQ.col(5) = Rcpp::as<vec>(drawList["log_dq"]);
-            // Rcout << "end psi" << endl;
-            break;
-        case 6:
-            // Rcout << "start xi0" << endl;
-            drawList = sampleXi0( Y_k, N.col(k), particles);
-            particles["xi0"] = Rcpp::as<mat>(drawList["xi0"]);
-            log_dQ.col(6) = Rcpp::as<vec>(drawList["log_dq"]);
-            // Rcout << "end xi0" << endl;
-            break;
-        case 7:
-            // Rcout << "start E" << endl;
-            drawList = sampleE( N.col(k), particles);
-            particles["E"] = Rcpp::as<mat>(drawList["E"]);
-            log_dQ.col(7) = Rcpp::as<vec>(drawList["log_dq"]);
-            // Rcout << "end E" << endl;
-            break;
-        }
-    }
+    // for(int ipar=0; ipar<5; ipar++) {
+    //     switch ( parPerm(ipar) ) {
+    //     case 3:
+    //         // Rcout << "start xi" << endl;
+    //         drawList = sampleXi( Y_k, C_k, N.col(k), particles);
+    //         particles["xi"] = Rcpp::as<cube>(drawList["xi"]);
+    //         log_dQ.col(3) = Rcpp::as<vec>(drawList["log_dq"]);
+    //         // Rcout << "end xi" << endl;
+    //         break;
+    //     case 4:
+    //         // Rcout << "start G" << endl;
+    //         drawList = sampleG(Y_k, C_k, N.col(k), particles);
+    //         particles["G"] = Rcpp::as<mat>(drawList["G"]);
+    //         log_dQ.col(4) = Rcpp::as<vec>(drawList["log_dq"]);
+    //         // Rcout << "end G" << endl;
+    //         break;
+    //     case 5:
+    //         // Rcout << "start psi" << endl;
+    //         drawList = samplePsi( Y_k, C_k, N.col(k), particles);
+    //         particles["psi"] = Rcpp::as<mat>(drawList["psi"]);
+    //         log_dQ.col(5) = Rcpp::as<vec>(drawList["log_dq"]);
+    //         // Rcout << "end psi" << endl;
+    //         break;
+    //     case 6:
+    //         // Rcout << "start xi0" << endl;
+    //         drawList = sampleXi0( Y_k, N.col(k), particles);
+    //         particles["xi0"] = Rcpp::as<mat>(drawList["xi0"]);
+    //         log_dQ.col(6) = Rcpp::as<vec>(drawList["log_dq"]);
+    //         // Rcout << "end xi0" << endl;
+    //         break;
+    //     case 7:
+    //         // Rcout << "start E" << endl;
+    //         drawList = sampleE( N.col(k), particles);
+    //         particles["E"] = Rcpp::as<mat>(drawList["E"]);
+    //         log_dQ.col(7) = Rcpp::as<vec>(drawList["log_dq"]);
+    //         // Rcout << "end E" << endl;
+    //         break;
+    //     }
+    // }
     
     vec iw;
     double log_py, perplexity;
@@ -1273,10 +1175,12 @@ Rcpp::List PMC::iter(const uvec& T,
     M = Rcpp::as<mat>(particles["E"]).rows(resamp);
     particles["E"] = M;
 
+    all_particles[k] = particles;
+
     // Rcout << "end resampling" << endl;
     
     return Rcpp::List::create(
-        Rcpp::Named( "particles" ) = particles,
+        // Rcpp::Named( "particles" ) = particles,
         Rcpp::Named( "log_py" ) = log_py,
         Rcpp::Named( "nResampled" ) = nResampled,
         Rcpp::Named( "perplexity" ) = perplexity  );
