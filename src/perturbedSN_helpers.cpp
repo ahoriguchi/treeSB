@@ -17,9 +17,9 @@ using namespace std;
 
 const double log2pi = std::log(2.0 * M_PI);
 
-arma::mat mvrnormArma(int n, arma::vec mu, arma::mat sigma) 
+arma::mat mvrnormArmaChol(int n, arma::vec mu, const arma::mat& sigmaChol) 
 {
-    int ncols = sigma.n_cols;
+    int ncols = sigmaChol.n_cols;
     // arma::mat Y = arma::randn(n, ncols);
     
     // This is clumsy, but apparently reuiqred for reproducibility,
@@ -34,14 +34,47 @@ arma::mat mvrnormArma(int n, arma::vec mu, arma::mat sigma)
     // Rcout << "Y = arma::randn(n, ncols)" << Y(0,0) << endl;
     
     
-    return arma::repmat(mu, 1, n).t() + Y * arma::chol(sigma);
+    return arma::repmat(mu, 1, n).t() + Y * sigmaChol;
 }
+
+arma::mat mvrnormArma(int n, arma::vec mu, arma::mat sigma) 
+{
+    // int ncols = sigma.n_cols;
+    // // arma::mat Y = arma::randn(n, ncols);
+    
+    // // This is clumsy, but apparently reuiqred for reproducibility,
+    // // when initializing with randn<mat>(num_particles, n_k) results 
+    // // are not consistent across platforms. 
+    // arma::mat Y(n, ncols);
+    // for (int row=0; row<n; row++) {
+    //     for (int col=0; col<ncols; col++) {
+    //         Y(row,col) = randn();
+    //     }
+    // }
+    // // Rcout << "Y = arma::randn(n, ncols)" << Y(0,0) << endl;
+    
+    
+    // return arma::repmat(mu, 1, n).t() + Y * arma::chol(sigma);
+
+    arma::mat sigmaChol = arma::chol(sigma);
+    return mvrnormArmaChol(n, mu, sigmaChol);
+}
+
+
+arma::mat rWishartArmaChol(const arma::mat& SigmaChol, int df)
+{
+    int p = SigmaChol.n_rows;
+    vec m(p); m.zeros();
+    mat X = mvrnormArmaChol(df, m, SigmaChol);
+    return X.t()*X;
+}
+
 
 arma::mat rWishartArma(arma::mat Sigma, int df)
 {
     int p = Sigma.n_rows;
     vec m(p); m.zeros();
-    mat X = mvrnormArma(df, m, Sigma );
+    mat X = mvrnormArma(df, m, Sigma);
     return X.t()*X;
 }
 

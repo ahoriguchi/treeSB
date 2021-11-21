@@ -21,6 +21,7 @@ private:
   int num_particles, num_iter, num_burnin, num_thin, num_display;   // number of iteration, burnin and thinning
   // int seed;         // initial random seed
   size_t treestr;
+  bool to_save_W;
   
   /* --- hyperparameters --- */
   int length_chain;
@@ -31,7 +32,7 @@ private:
   double ldLamb, sgnLamb;
   vec b0;
   // mat E0, invE0, B0, invB0;
-  mat E0, invE0, cholE0, cholInvE0, B0, invB0;
+  mat E0, invE0, cholE0, cholInvE0, B0, invB0, cholB0;
   double ldE0, sgnE0;
   bool merge_step;
   double merge_par;
@@ -52,7 +53,6 @@ private:
   cube saveG, saveOmega, saveE;
   mat saveLog_py, savePerplexity;
   umat saveNResampled;
-  // field<vec> saveGam;
 
   /* --- functions --- */
   void main_loop(const Rcpp::List& initParticles, bool init);
@@ -63,23 +63,23 @@ private:
     
   Rcpp::List initialParticles();
   
-  void sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
+  void sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp);
   
-  void sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
+  void sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp);
     
-  void samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
+  void samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp);
   
-  void sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
+  void sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& log_dQ, const size_t pp);
   
-  void sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
+  void sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp);
   
-  void sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp);
+  void sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp);
     
   arma::vec logPriorDens(Rcpp::List& particles);
 
   arma::vec logPostDens(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles);
     
-  Rcpp::List iter(const uvec& T, size_t k, const umat& N, Rcpp::List& all_particles);
+  Rcpp::List iter(size_t k, const umat& N, Rcpp::List& all_particles);
 
   void sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW);
     

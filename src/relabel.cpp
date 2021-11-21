@@ -18,7 +18,7 @@ Rcpp::List relabel(const Rcpp::List res)
   
   // Rcout << unique(t_relabel) << endl;
   // mat z_relabel = Rcpp::as<mat>(chain["z"]);
-  cube W_relabel = Rcpp::as<cube>(chain["W"]);
+  // cube W_relabel = Rcpp::as<cube>(chain["W"]);
   cube xi_relabel = Rcpp::as<cube>(chain["xi"]);
   int J = xi_relabel.n_rows;
   Rcout << "J=" << J << "\t";
@@ -34,7 +34,7 @@ Rcpp::List relabel(const Rcpp::List res)
   mat nResampled_relabel = Rcpp::as<mat>(chain["nResampled"]);
   cube Omega_relabel = Rcpp::as<cube>(chain["Omega"]);
   cube alpha_relabel = Rcpp::as<cube>(chain["alpha"]);
-  cube gamma_relabel = Rcpp::as<cube>(chain["gamma"]);
+  // cube gamma_relabel = Rcpp::as<cube>(chain["gamma"]);
   
   // Rcout << "defined relabels" << endl;
   
@@ -114,7 +114,7 @@ Rcpp::List relabel(const Rcpp::List res)
     
     // Rcout << "did t" << endl;
     
-    mat W_copy = W_relabel.slice(s);
+    // mat W_copy = W_relabel.slice(s);
     mat xi_copy = xi_relabel.slice(s);
     mat xi0_copy = xi0_relabel.slice(s);
     mat psi_copy = psi_relabel.slice(s);
@@ -130,7 +130,7 @@ Rcpp::List relabel(const Rcpp::List res)
       // uvec idx = find(relabeling==k);
       // int kk = relabeling(idx(0));
       int kk = back_relabeling(k);
-      W_relabel.slice(s).col(k) = W_copy.col(kk);
+      // W_relabel.slice(s).col(k) = W_copy.col(kk);
       xi_relabel.subcube(0,k*p,s,J-1,k*p+p-1,s) = 
         xi_copy.submat(0,kk*p,J-1,kk*p+p-1);
       xi0_relabel.slice(s).col(k) = xi0_copy.col(kk);
@@ -152,7 +152,7 @@ Rcpp::List relabel(const Rcpp::List res)
   
   return Rcpp::List::create(
     Rcpp::Named( "t" ) = t_relabel+1,
-    Rcpp::Named( "W" ) = W_relabel,
+    // Rcpp::Named( "W" ) = W_relabel,
     Rcpp::Named( "xi" ) = xi_relabel,
     Rcpp::Named( "xi0" ) = xi0_relabel,
     Rcpp::Named( "psi" ) = psi_relabel,

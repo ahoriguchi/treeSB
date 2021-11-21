@@ -10,13 +10,13 @@ using namespace std;
 const double log2pi = std::log(2.0 * M_PI);
 
 PMC::PMC(arma::mat Y,
-                 arma::mat psiX,
-                 arma::uvec C,
-                 Rcpp::List prior,
-                 Rcpp::List pmc,
-                 Rcpp::List state, 
-                 Rcpp::List initParticles,
-                 bool init) : Y(Y), psiX(psiX), C(C)
+         arma::mat psiX,
+         arma::uvec C,
+         Rcpp::List prior,
+         Rcpp::List pmc,
+         Rcpp::List state, 
+         Rcpp::List initParticles,
+         bool init) : Y(Y), psiX(psiX), C(C)
 {
     // Rcout << "start of PMC::PMC()" << endl;
     p = Y.n_cols;
@@ -25,6 +25,7 @@ PMC::PMC(arma::mat Y,
     K = Rcpp::as<int>(prior["K"]);
     R = psiX.n_cols;
     treestr = Rcpp::as<size_t>(prior["treestr"]);
+    to_save_W = false;
     
     num_particles = Rcpp::as<int>(pmc["npart"]);
     num_iter = Rcpp::as<int>(pmc["nskip"]) * Rcpp::as<int>(pmc["nsave"]);
@@ -39,7 +40,9 @@ PMC::PMC(arma::mat Y,
     
     saveT.set_size(length_chain, n);
     saveZ.set_size(length_chain, n);
-    saveW.set_size(n, K, length_chain);  // saveW.set_size(J, K, length_chain);
+    if (to_save_W) {
+        saveW.set_size(n, K, length_chain);  // saveW.set_size(J, K, length_chain);
+    }
     saveXi.set_size(J, p*K, length_chain);
     saveXi0.set_size(p, K, length_chain);
     saveE.set_size(p, K*p, length_chain);
@@ -70,6 +73,7 @@ PMC::PMC(arma::mat Y,
     // invE0 = inv_sympd(E0);
     b0 = Rcpp::as<vec>(prior["b0"]);
     B0 = Rcpp::as<mat>(prior["B0"]);
+    chol(cholB0, B0);
     invB0 = inv_sympd(B0);
     merge_step = Rcpp::as<bool>(prior["merge_step"]);
     merge_par = Rcpp::as<double>(prior["merge_par"]);
@@ -78,29 +82,6 @@ PMC::PMC(arma::mat Y,
     gam_Sig = Rcpp::as<mat>(prior["gam_Sig"]);
     gam_Sig_inv = arma::inv(gam_Sig);
     m0 = Rcpp::as<double>(prior["m0"]);
-    
-    // saveGam = mvrnormArma(K, gam_mu, gam_Sig).t();   
-    
-    // XX: This is inefficient because of needless copying. 
-    size_t Kstar = K-1;  // K-1 for balanced tree; K for unbalanced tree
-    saveGam.set_size(J, Kstar, R);
-    mat tmp = mvrnormArma(J*Kstar, gam_mu, gam_Sig);  // to perform only one matrix inverse
-    for (size_t j=0; j<J; j++)
-        for (size_t m=0; m<Kstar; m++)
-            saveGam.tube(j, m) = tmp.row(Kstar*j + m);
-
-
-    //   saveParticles = control$saveParticles
-    //   if(saveParticles) {
-    //     outFolder = control$outFolder
-    //     if(!(outFolder %in% dir())) {
-    //       dir.create(outFolder, recursive=T)
-    //     }
-    //     if(!('Iterations' %in% dir(outFolder))){
-    //       dir.create(paste0(outFolder, '/Iterations'), recursive=T)
-    //     }
-    //   }
-    //   verbose = control$verbose
     
     main_loop(initParticles, init);
 }
@@ -123,6 +104,14 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
     mat alpha(p,K);
     rowvec z(n);
 
+    // XX: This is inefficient because of needless copying. 
+    size_t Kstar = K-1;  // K-1 for balanced tree; K for unbalanced tree
+    saveGam.set_size(J, Kstar, R);
+    mat tmp = mvrnormArma(J*Kstar, gam_mu, gam_Sig);  // to perform only one matrix inverse
+    for (size_t j=0; j<J; j++)
+        for (size_t m=0; m<Kstar; m++)
+            saveGam.tube(j, m) = tmp.row(Kstar*j + m);
+
     // mat log_dQ(num_particles, 8);
     // log_dQ.fill(0);
     vec log_py(K);
@@ -139,6 +128,10 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
         Rcout << "using fixed initial particles" << endl;
         all_particles = Rcpp::as<Rcpp::List>(initParticles);
     }
+
+
+
+
     
     for (int it=0; it<(num_iter+num_burnin); it++) {
         if ((it+1)%num_display == 0)
@@ -205,7 +198,9 @@ void PMC::main_loop(const Rcpp::List& initParticles, bool init) {
         {
             saveT.row(km) = T.t();
             saveZ.row(km) = z;
-            saveW.slice(km) = exp(logW);  // saveW.slice(km) = exp(logW);
+            if (to_save_W) {
+                saveW.slice(km) = exp(logW);  // saveW.slice(km) = exp(logW);
+            }
             saveXi.slice(km) = reshape( mat(xi.memptr(), xi.n_elem, 1, false), J, K*p);
             saveXi0.slice(km) = xi0;
             savePsi.slice(km) = psi;
@@ -243,15 +238,15 @@ void PMC::sampleGam() {
             size_t lfl = (m+1) * Km - K;   // Subtract K to shift from K:(2K-1) to 0:(K-1)
             // vec gam_mu_adapt = gam_mu * (1 + log2(m+1));
 
-            for(size_t j=0; j<J; j++) {
+            for (size_t j=0; j<J; j++) {
                 
                 uvec Cj_and_k_under_m = arma::find(lfl<=T && T<(lfl+Km) && C==j);
                 uvec Tij = T(Cj_and_k_under_m);
                 mat psiXij = psiX.rows(Cj_and_k_under_m);  
                 
                 // 1. Update PG data
-                vec gamtmp = saveGam.tube(j, m);  // Compiler wants me to store this before multiplying.
-                vec pgdat = rpg(ones<vec>(Tij.size()), psiXij * gamtmp);
+                vec gamvec = saveGam.tube(j, m);  // Compiler wants me to store this before multiplying.
+                vec pgdat = rpg(ones<vec>(Tij.size()), psiXij * gamvec);
                 
                 // 2. Update gamma
                 vec kappa(Tij.size());
@@ -267,15 +262,15 @@ void PMC::sampleGam() {
     } else if (treestr == 0) { // LT
 
         for (size_t m=0; m<(K-1); m++) {
-            for(size_t j=0; j<J; j++) {
+            for (size_t j=0; j<J; j++) {
                 
                 uvec ij = arma::find(T>=m && C==j);
                 uvec Tij = T(ij);
                 mat psiXij = psiX.rows(ij);  
                 
                 // 1. Update PG data
-                vec gamtmp = saveGam.tube(j, m);  // Compiler wants me to store this before multiplying.
-                vec pgdat = rpg(ones<vec>(Tij.size()), psiXij * gamtmp);
+                vec gamvec = saveGam.tube(j, m);  // Compiler wants me to store this before multiplying.
+                vec pgdat = rpg(ones<vec>(Tij.size()), psiXij * gamvec);
                 
                 // 2. Update gamma
                 vec kappa(Tij.size());
@@ -335,8 +330,6 @@ void PMC::getLogWs(mat& logW) {
 
     }
 
-
-
 }
 
 
@@ -346,7 +339,6 @@ void PMC::getLogWs(mat& logW) {
 
         
 Rcpp::List PMC::initialParticles() {
-            // Rcpp::List PMC::initialParticles( arma::uvec T ) {
     // Given the arguments, initialPoints creates a population 
     // of particles from simple proposals: sample z iid N(0,1).
     // If N_k>0:
@@ -456,7 +448,7 @@ Rcpp::List PMC::initialParticles() {
             xi_0k.each_row() += mean_y;
             
             for (size_t j=0; j<J; j++) 
-                    xi_k.subcube(j,0,0,j,p-1,num_particles-1) = trans( xi_0k + mvrnormArma(num_particles, mean(xi_0k, 0).t(), E0/(e0 - p - 1.0)) );
+                xi_k.subcube(j,0,0,j,p-1,num_particles-1) = trans( xi_0k + mvrnormArma(num_particles, mean(xi_0k, 0).t(), E0/(e0 - p - 1.0)) );
             
             for (size_t iN=0; iN<num_particles; iN++) {
                 mat e = ( Y.each_row() - xi_0k.row(iN) );
@@ -469,7 +461,8 @@ Rcpp::List PMC::initialParticles() {
         } // end N_k==0
         
         for (size_t iN=0; iN<num_particles; iN++) {
-            mat E = inv_sympd(rWishartArma(inv_sympd(E0), e0 ));  // XX: is this correct? there's no dependence on iN
+            // mat E = inv_sympd(rWishartArma(invE0, e0));  
+            mat E = inv_sympd(rWishartArmaChol(cholInvE0, e0));  
             E_k.row(iN) = vectorise(E).t();
         }
         
@@ -489,7 +482,7 @@ Rcpp::List PMC::initialParticles() {
 }
 
 
-void PMC::sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp) {
     // Given the arguments, this function returns a population of MC draws 
     // for the values of the variable Xi, in the p-variate skew-N model.
     int nk = Y_k.n_rows;
@@ -528,40 +521,38 @@ void PMC::sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List&
         // Rcout << "end empty xi" << endl;
     } else { // if nk>0:
         for ( int iN=0; iN<num_particles; iN++ ) {
-                xi.slice(iN) = repmat( xi0.row(iN), J, 1 );
-                log_dxi.row(iN).fill(0);
-                mat invE = inv_sympd(reshape(E.row(iN),p,p));
-                mat invG = inv_sympd(reshape(G.row(iN),p,p));
-                for(int j=0; j<J; j++) {
-                    int njk = N_k(j);
-                    if ( njk ==0 ) {
-                        // xi.slice(iN).row(j) = xi0.row(iN);
-                        xi.slice(iN).row(j) = trans( mvnrnd(xi0.row(iN).t(), reshape(E.row(iN),p,p)) );
-                        // log_dxi(iN, j) = 0;
-                        log_dxi(iN, j) = as_scalar(dmvnrm_arma_precision(
-                                                                                            xi.slice(iN).row(j),
-                                                                                            xi0.row(iN),
-                                                                                            reshape(E.row(iN),p,p)) );
-                    } else { // if njk>0
-                        uvec jk_idx = find(C_k==j);
-                        mat Yjk = Y_k.rows(jk_idx);
-                        mat zin = z.row(iN);
-                        rowvec zjk = zin.cols(jk_idx);
-                        // mat v = inv_sympd(invE + njk*invG);
-                        mat v = inv_sympd(invE + zeta*njk*invG);
-                        rowvec mean_y = mean(Yjk, 0);
-                        // vec m = invE * xi0.row(iN).t() + njk*invG * trans((mean_y - (psi.row(iN) * mean(abs(zjk)))));
-                        vec m = invE * xi0.row(iN).t() + zeta*njk*invG * trans((mean_y - (psi.row(iN) * mean(abs(zjk)))));
-                        xi.slice(iN).row(j) = trans(mvnrnd(v * m, v));
-                        log_dxi(iN, j) = as_scalar(dmvnrm_arma_precision(
-                                                                    xi.slice(iN).row(j), trans(v * m),
-                                                                    invE + zeta*njk*invG ) );
-                        // log_dxi(iN, j) = as_scalar(dmvnrm_arma_precision(
-                        //   xi.slice(iN).row(j), trans(v * m),
-                        //   invE + njk*invG ) );
-                    }
-                } // end j loop
-            // } // end S(iN)==1 if
+            xi.slice(iN) = repmat( xi0.row(iN), J, 1 );
+            log_dxi.row(iN).fill(0);
+            mat invE = inv_sympd(reshape(E.row(iN),p,p));
+            mat invG = inv_sympd(reshape(G.row(iN),p,p));
+            for(int j=0; j<J; j++) {
+                int njk = N_k(j);
+                if ( njk ==0 ) {
+                    // xi.slice(iN).row(j) = xi0.row(iN);
+                    xi.slice(iN).row(j) = trans( mvnrnd(xi0.row(iN).t(), reshape(E.row(iN),p,p)) );
+                    // log_dxi(iN, j) = 0;
+                    log_dxi(iN, j) = as_scalar(dmvnrm_arma_precision(xi.slice(iN).row(j),
+                                                                        xi0.row(iN),
+                                                                        reshape(E.row(iN),p,p)) );
+                } else { // if njk>0
+                    uvec jk_idx = find(C_k==j);
+                    mat Yjk = Y_k.rows(jk_idx);
+                    mat zin = z.row(iN);
+                    rowvec zjk = zin.cols(jk_idx);
+                    // mat v = inv_sympd(invE + njk*invG);
+                    mat v = inv_sympd(invE + zeta*njk*invG);
+                    rowvec mean_y = mean(Yjk, 0);
+                    // vec m = invE * xi0.row(iN).t() + njk*invG * trans((mean_y - (psi.row(iN) * mean(abs(zjk)))));
+                    vec m = invE * xi0.row(iN).t() + zeta*njk*invG * trans((mean_y - (psi.row(iN) * mean(abs(zjk)))));
+                    xi.slice(iN).row(j) = trans(mvnrnd(v * m, v));
+                    log_dxi(iN, j) = as_scalar(dmvnrm_arma_precision(
+                                                                xi.slice(iN).row(j), trans(v * m),
+                                                                invE + zeta*njk*invG ) );
+                    // log_dxi(iN, j) = as_scalar(dmvnrm_arma_precision(
+                    //   xi.slice(iN).row(j), trans(v * m),
+                    //   invE + njk*invG ) );
+                }
+            } // end j loop
         } // end iN (particles) loop
     } // end nk>0 loop
     
@@ -572,7 +563,7 @@ void PMC::sampleXi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List&
     
 }
 
-void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp) {
     
     int nk = Y_k.n_rows;
     
@@ -593,7 +584,8 @@ void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& 
     if (nk==0) {
         // Rcout << "empty G" << endl;
         for ( iN=0; iN<num_particles; iN++) {
-            g = inv_sympd(rWishartArma(invLamb, m0 ));
+            // g = inv_sympd(rWishartArma(invLamb, m0 ));
+            g = inv_sympd(rWishartArmaChol(cholInvLamb, m0 ));
             G.row(iN) = vectorise(g).t();
             log_dG(iN) = dIWishartArmaHelp(g, m0, Lamb, true, ldLamb, sgnLamb);
             // log_dG(iN) = dIWishartArma(g, m0, Lamb);
@@ -603,22 +595,21 @@ void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& 
         for ( iN=0; iN<num_particles; iN++ ) {
             mat Sk(p,p);
             Sk.fill(0);
-                for (int j=0; j<J; j++) {
-                    int njk = N_k(j);
-                    if ( njk > 0 ) {
-                        uvec jk_idx = find(C_k==j);
-                        mat ejk(njk, p);
-                        mat zpj(njk, p);
-                        rowvec xi_j = xi.subcube(j, 0, iN, j, p-1, iN);
-                        mat Y_jk = Y_k.rows(jk_idx);
-                        ejk =  Y_jk.each_row() - xi_j;
-                        vec zrow = trans( absz.row(iN) );
-                        zpj = repmat( zrow(jk_idx) , 1 ,p);
-                        zpj.each_row() %= psi.row(iN);
-                        ejk -= zpj;
-                        Sk += ejk.t() * ejk;
-                    }
-                // }
+            for (int j=0; j<J; j++) {
+                int njk = N_k(j);
+                if ( njk > 0 ) {
+                    uvec jk_idx = find(C_k==j);
+                    mat ejk(njk, p);
+                    mat zpj(njk, p);
+                    rowvec xi_j = xi.subcube(j, 0, iN, j, p-1, iN);
+                    mat Y_jk = Y_k.rows(jk_idx);
+                    ejk =  Y_jk.each_row() - xi_j;
+                    vec zrow = trans( absz.row(iN) );
+                    zpj = repmat( zrow(jk_idx) , 1 ,p);
+                    zpj.each_row() %= psi.row(iN);
+                    ejk -= zpj;
+                    Sk += ejk.t() * ejk;
+                }
             }
             if (is_Lamb_Zero) {
                 Lambda_k = zeta * Sk;
@@ -639,7 +630,7 @@ void PMC::sampleG(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& 
 }
 
 
-void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp) {
     
     int nk = Y_k.n_rows;
     int p = Y_k.n_cols;
@@ -654,7 +645,7 @@ void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List
     mat psi(num_particles, p);
     vec log_dpsi(num_particles);
     
-    if(nk == 0) {
+    if (nk == 0) {
         // Rcout << "empty psi" << endl;
         // add sampling from prior on n-ball
         vec x(p);
@@ -670,7 +661,8 @@ void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List
 
             if (false) {
                 // sample from Sigma prior (take psi*psi element here to be zero)
-                mat ginv = rWishartArma(invLamb, m0);
+                mat ginv = rWishartArmaChol(cholInvLamb, m0);
+                // mat ginv = rWishartArma(invLamb, m0);
                 // mat ginv = rWishartArma(invLamb, m, false, "invLamb");
                 h = diagvec(inv(ginv));
                 // Let D = sqrt( diagmat(g) ), where g = inv(ginv). Then -2*log|D| = accu(log(diagvec(g))). 
@@ -715,9 +707,7 @@ void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List
             // mat vpsi = reshape(G.row(iN) / (sums_z2(iN)), p, p);
             psi.row(iN) = (arma::mvnrnd(mpsi.t(), vpsi)).t();
             log_dpsi(iN) = as_scalar(
-                dmvnrm_arma_precision(  psi.row(iN),
-                                                                mpsi,
-                                                                inv_sympd(vpsi) ));
+                dmvnrm_arma_precision(  psi.row(iN), mpsi, inv_sympd(vpsi) ));
         } // end iN (particles) loop
     } // end nk>0 if
 
@@ -726,7 +716,7 @@ void PMC::samplePsi(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List
     
 }
 
-void PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& log_dQ, const size_t pp) {
     
     int nk = Y_k.n_rows;
     vec log_dZ(num_particles);
@@ -755,8 +745,8 @@ void PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& l
             u = randu(nk);
             // Rcout << "randu(nk)" << u(0) << endl;
             for ( i=0; i<nk; i++ ) {
-                    xi_j = xi.subcube(C_k(i), 0, ip, C_k(i), p-1, ip);
-                    m = as_scalar(v * zeta * (psi.row(ip) * invG * (Y_k.row(i) - xi_j).t()));
+                xi_j = xi.subcube(C_k(i), 0, ip, C_k(i), p-1, ip);
+                m = as_scalar(v * zeta * (psi.row(ip) * invG * (Y_k.row(i) - xi_j).t()));
                 if (u(i) < 0.5) {
                     sgn = -1.0;
                 } else {
@@ -777,7 +767,7 @@ void PMC::sampleZ(const mat& Y_k, const uvec& C_k, Rcpp::List& particles, mat& l
 }
 
 
-void PMC::sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp) {
     int nk = Y_k.n_rows;
 
     mat psi = Rcpp::as<mat>(particles["psi"]);
@@ -791,7 +781,8 @@ void PMC::sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat&
     vec log_dxi0(num_particles);
     
     if(nk == 0) {
-        xi0 = mvrnormArma(num_particles, b0, B0);
+        xi0 = mvrnormArmaChol(num_particles, b0, cholB0);
+        // xi0 = mvrnormArma(num_particles, b0, B0);
         log_dxi0 =  dmvnrm_arma_precision(xi0, b0.t(), invB0 );
     } else { // if nk>0:
         for ( int iN=0; iN<num_particles; iN++ ) {
@@ -799,19 +790,17 @@ void PMC::sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat&
             mat vxi0(p,p);
             mat inv_vxi0(p,p);
             mat invG = inv_sympd(reshape(G.row(iN), p, p));
-                uvec jk_idx = find(N_k>0);
-                mat invE = inv_sympd(reshape(E.row(iN), p, p));
-                inv_vxi0 = invB0 + zeta*jk_idx.n_elem*invE;
-                vxi0 = inv_sympd(inv_vxi0);
-                mat xi_slice = xi.slice(iN);
-                vec mean_xi = trans( mean(xi_slice.rows(jk_idx), 0) );
-                mxi0 = vxi0 * (invB0*b0 + zeta * jk_idx.n_elem * invE * mean_xi);
-            // } // end S(iN)==1 if
+            uvec jk_idx = find(N_k>0);
+            mat invE = inv_sympd(reshape(E.row(iN), p, p));
+            inv_vxi0 = invB0 + zeta*jk_idx.n_elem*invE;
+            vxi0 = inv_sympd(inv_vxi0);
+            mat xi_slice = xi.slice(iN);
+            vec mean_xi = trans( mean(xi_slice.rows(jk_idx), 0) );
+            mxi0 = vxi0 * (invB0*b0 + zeta * jk_idx.n_elem * invE * mean_xi);
             xi0.row(iN) = mvrnormArma(1, mxi0, vxi0);
-            log_dxi0(iN) =  as_scalar(dmvnrm_arma_precision(
-                                                                    xi0.row(iN), 
-                                                                    mxi0.t(),
-                                                                    inv_vxi0 ) );
+            log_dxi0(iN) =  as_scalar(dmvnrm_arma_precision(xi0.row(iN), 
+                                                            mxi0.t(),
+                                                            inv_vxi0 ) );
         } // end iN (particles) loop
     } // end nk>0 loop
 
@@ -821,7 +810,7 @@ void PMC::sampleXi0(const mat& Y_k, const uvec& N_k, Rcpp::List& particles, mat&
 
 }
 
-void PMC::sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp) {
+void PMC::sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, const size_t pp) {
     
     int nk = accu(N_k);
     
@@ -834,11 +823,9 @@ void PMC::sampleE(const uvec& N_k, Rcpp::List& particles, mat& log_dQ, size_t pp
     if (nk==0) {
         // Rcout << "empty E" << endl;
         for (size_t iN=0; iN<num_particles; iN++) {
-            // mat e = inv_sympd(rWishartArma( inv_sympd(E0), e0 ));
-            mat e = inv_sympd(rWishartArma( invE0, e0 ));
+            mat e = inv_sympd(rWishartArmaChol( cholInvE0, e0 ));
             E.row(iN) = vectorise(e).t();
             log_dE(iN) = dIWishartArmaHelp(e, e0, E0, true, ldE0, sgnE0);
-            // log_dE(iN) = dIWishartArma(e, e0, E0);
         }
         // Rcout << "end empty E" << endl;
     } else { // if nk>0
@@ -921,67 +908,6 @@ arma::vec PMC::logPriorDens( Rcpp::List& particles ) {
     return logPriorDens;
 }
 
-// arma::vec PMC::logPostDens( const mat& Y_k, const uvec& C_k, uvec N_k,
-//                                                         Rcpp::List particles,
-//                                                         Rcpp::List prior ) {
-
-//     int nk = Y_k.n_rows;
-//     vec loglikelihood(num_particles);
-//     loglikelihood.fill(0);
-
-//     if (nk>0) {
-//             // uvec S = Rcpp::as<umat>(particles["S"]);
-//             cube xi = Rcpp::as<cube>(particles["xi"]);
-//             mat xi0 = Rcpp::as<mat>(particles["xi0"]);
-//             mat psi = Rcpp::as<mat>(particles["psi"]);
-//             mat G = Rcpp::as<mat>(particles["G"]);
-//             mat absz = abs(Rcpp::as<mat>(particles["z"]));
-        
-//             vec sums_z2(num_particles);
-//             int iN;
-//             // mat e(nk,p);
-//             mat zp;
-//             mat g(p,p);
-//             mat ee(num_particles, pow(p,2));
-//             vec detG(num_particles);
-//             vec PsiVec(num_particles);
-        
-//         // #pragma omp parallel for private(ip, e, zp, Lambda, g)
-//             for (iN=0; iN<num_particles; iN++) {
-//                     for (int j=0; j<J; j++) {
-//                         int njk = N_k(j);
-//                         if ( njk > 0 ) {
-//                             uvec jk_idx = find(C_k==j);
-//                             mat absz_jk = absz.cols(jk_idx);
-//                             sums_z2 = arma::sum(absz_jk % absz_jk, 1);
-//                             mat Y_jk = Y_k.rows(jk_idx);
-//                             rowvec xi_j = xi.subcube(j, 0, iN, j, p-1, iN);
-//                             mat e = Y_jk.each_row() - xi_j;
-//                             zp = repmat(absz_jk.row(iN).t(), 1, p);
-//                             zp.each_row() %= psi.row(iN);
-//                             e -= zp;
-//                             ee = e.t() * e;
-//                             g = reshape(G.row(iN), p, p);
-//                             detG(iN) = det(g);
-//                             PsiVec(iN) = accu(inv(g) % ee);
-//                             loglikelihood(iN) += as_scalar((- njk/2.0) * log(detG(iN)) - 0.5 * PsiVec(iN) + (- 0.5) * sums_z2.row(iN));
-//                         }
-//                     }
-//                 // }
-//             }
-//             // loglikelihood
-//             double loglik_normalizing_const = - nk * (p+1.0)/2.0 * log(2.0*M_PI);
-//             loglikelihood += loglik_normalizing_const;
-//     } // end nk>0 
-    
-    
-//     vec log_prior = logPriorDens( particles, //varphi, 
-//                                                                 prior );
-//     // Numerator of the unnormalized importance weights
-//     vec log_pi = log_prior + zeta * loglikelihood;
-//     return(log_pi);
-// }
-
 arma::vec PMC::logPostDens( const mat& Y_k, const uvec& C_k, const uvec& N_k,
                                                         Rcpp::List& particles) {
     size_t nk = Y_k.n_rows;
@@ -1040,6 +966,8 @@ Rcpp::List PMC::iter(size_t k, const umat& N, Rcpp::List& all_particles) {
     
     size_t nk = Y_k.n_rows;
 
+    // Proposal step (with permuted sweeps):
+
     mat log_dQ(num_particles, 8, fill::zeros);
     sampleZ(Y_k, C_k, particles, log_dQ, 1);  // drawList = sampleZ(Y_k, C_k, particles);
 
@@ -1055,81 +983,27 @@ Rcpp::List PMC::iter(size_t k, const umat& N, Rcpp::List& all_particles) {
             case 7: sampleE(N_k, particles, log_dQ, pp); break;
         }
     }
-
-    // Proposal step (with permuted sweeps):
-
-    // List drawList;
-    // // Rcout << "start z" << endl;
-    // drawList = sampleZ(Y_k, C_k, particles);
-    // particles["z"] = Rcpp::as<mat>(drawList["z"]);
-    // log_dQ.col(1) = Rcpp::as<vec>(drawList["log_dq"]);
-    // // Rcout << "end z" << endl;
-
-    // uvec parPerm = randsamp(5,3,7);
-    // // Rcout << "randsamp" << parPerm << endl;
-
-    // for(int ipar=0; ipar<5; ipar++) {
-    //     switch ( parPerm(ipar) ) {
-    //     case 3:
-    //         // Rcout << "start xi" << endl;
-    //         drawList = sampleXi( Y_k, C_k, N.col(k), particles);
-    //         particles["xi"] = Rcpp::as<cube>(drawList["xi"]);
-    //         log_dQ.col(3) = Rcpp::as<vec>(drawList["log_dq"]);
-    //         // Rcout << "end xi" << endl;
-    //         break;
-    //     case 4:
-    //         // Rcout << "start G" << endl;
-    //         drawList = sampleG(Y_k, C_k, N.col(k), particles);
-    //         particles["G"] = Rcpp::as<mat>(drawList["G"]);
-    //         log_dQ.col(4) = Rcpp::as<vec>(drawList["log_dq"]);
-    //         // Rcout << "end G" << endl;
-    //         break;
-    //     case 5:
-    //         // Rcout << "start psi" << endl;
-    //         drawList = samplePsi( Y_k, C_k, N.col(k), particles);
-    //         particles["psi"] = Rcpp::as<mat>(drawList["psi"]);
-    //         log_dQ.col(5) = Rcpp::as<vec>(drawList["log_dq"]);
-    //         // Rcout << "end psi" << endl;
-    //         break;
-    //     case 6:
-    //         // Rcout << "start xi0" << endl;
-    //         drawList = sampleXi0( Y_k, N.col(k), particles);
-    //         particles["xi0"] = Rcpp::as<mat>(drawList["xi0"]);
-    //         log_dQ.col(6) = Rcpp::as<vec>(drawList["log_dq"]);
-    //         // Rcout << "end xi0" << endl;
-    //         break;
-    //     case 7:
-    //         // Rcout << "start E" << endl;
-    //         drawList = sampleE( N.col(k), particles);
-    //         particles["E"] = Rcpp::as<mat>(drawList["E"]);
-    //         log_dQ.col(7) = Rcpp::as<vec>(drawList["log_dq"]);
-    //         // Rcout << "end E" << endl;
-    //         break;
-    //     }
-    // }
     
-    vec iw;
-    double log_py, perplexity;
     vec log_pitilde;
     if (nk>0) {
         log_pitilde = logPostDens(Y_k, C_k, N.col(k), particles);
     } else {
-        log_pitilde = logPriorDens( particles);
+        log_pitilde = logPriorDens(particles);
     }
     vec log_q = sum(log_dQ, 1);
     // Rcout << "q " << log_q.t() << endl;
     vec log_iw = log_pitilde - log_q;
     // Rcout << "log iw raw " << log_iw.t() << endl;
     double cnst = max(log_iw);  // Constant needed for the computation of the marginal likelihood
-    log_py = cnst + log(accu(exp(log_iw-cnst))) - log(num_particles);
+    double log_py = cnst + log(accu(exp(log_iw-cnst))) - log(num_particles);
     vec iw_bar = exp(log_iw);
     vec log_iw_b = log_iw - log(num_particles) - log_py;
     vec iw_b = exp(log_iw_b);  // unnormalized weights
     // Rcout << "log iw unnormalized " << iw_b.t() << endl;
     // Rcout << "iw unnormalized " << exp(iw_b.t()) << endl;
-    iw = iw_b/accu(iw_b); // normalized weights
+    vec iw = iw_b/accu(iw_b); // normalized weights
     // Rcout << "iw final " << iw.t() << endl;
-    perplexity = exp(-accu(iw % log(iw))) / num_particles;
+    double perplexity = exp(-accu(iw % log(iw))) / num_particles;
 
     
     // Rcout << "end copmute weights" << endl;
@@ -1187,9 +1061,9 @@ void PMC::sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat
         for (size_t k=0; k<K; k++) {  // exp(logW(j,k))
             k_idx(0) = k;
             PT(C_j, k_idx) = dmsnArma(Y.rows(C_j),  // % wvec.col(k);
-                                                                xi.slice(k).row(j),
-                                                                Omega.slice(k), 
-                                                                alpha.col(k)); 
+                                        xi.slice(k).row(j),
+                                        Omega.slice(k), 
+                                        alpha.col(k)); 
         }
     }
     PT %= exp(logW);
@@ -1218,7 +1092,7 @@ Rcpp::List PMC::get_chain()
     return Rcpp::List::create(
         Rcpp::Named( "t" ) = saveT,
         Rcpp::Named( "z" ) = saveZ,
-        Rcpp::Named( "W" ) = saveW,
+        // Rcpp::Named( "W" ) = saveW,
         Rcpp::Named( "xi" ) = saveXi,
         Rcpp::Named( "xi0" ) = saveXi0,
         Rcpp::Named( "psi" ) = savePsi,
@@ -1228,8 +1102,7 @@ Rcpp::List PMC::get_chain()
         Rcpp::Named( "perplexity" ) = savePerplexity,
         Rcpp::Named( "nResampled" ) = saveNResampled,
         Rcpp::Named( "Omega" ) = saveOmega,
-        Rcpp::Named( "alpha" ) = saveAlpha,
-        Rcpp::Named( "gamma" ) = saveGam
+        Rcpp::Named( "alpha" ) = saveAlpha
     );
 }
 

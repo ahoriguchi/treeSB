@@ -6,7 +6,11 @@
 using namespace Rcpp;
 using namespace arma;
 
+arma::mat mvrnormArmaChol(int n, arma::vec mu, const arma::mat& sigmaChol);
+
 arma::mat mvrnormArma(int n, arma::vec mu, arma::mat sigma);
+
+arma::mat rWishartArmaChol(const arma::mat& SigmaChol, int df);
 
 arma::mat rWishartArma(arma::mat Sigma, int df);
 
