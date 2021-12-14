@@ -77,7 +77,11 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
       if(is.null(prior$gam_Sig))
       prior$gam_Sig = Matrix::diag(nrow=R)*(1000/R);
       if(is.null(prior$treestr))
-			prior$treestr = 1;  # 0 is LT; 1 is BT
+      prior$treestr = 1;  # 0 is LT; 1 is BT
+      if(is.null(prior$min_nclu))
+      prior$min_nclu = 1;  
+      if(is.null(prior$use_skew))
+      prior$use_skew = TRUE;  
     }
 
 

@@ -13,18 +13,19 @@ private:
   mat Y;            // the data (n,J)
   mat psiX;         // the covariates for weights (n,R)
   uvec C;           // the group membership (n,1)
-  int K;            // number of mixture components 
-  int J;            // the number of groups
-  int n;            // number of observations
-  int p;            // observation dimension
+  size_t K;            // number of mixture components 
+  size_t J;            // the number of groups
+  size_t n;            // number of observations
+  size_t p;            // observation dimension
   size_t R;         // number of covariate functions for weights
-  int num_particles, num_iter, num_burnin, num_thin, num_display;   // number of iteration, burnin and thinning
+  size_t num_particles, num_iter, num_burnin, num_thin, num_display;   // number of iteration, burnin and thinning
   // int seed;         // initial random seed
   size_t treestr;
   bool to_save_W;
+  bool use_skew;
   
   /* --- hyperparameters --- */
-  int length_chain;
+  size_t length_chain;
   vec tau_a;
   double e0;
   mat Lamb, invLamb, cholLamb, cholInvLamb;
@@ -41,6 +42,7 @@ private:
   mat gam_Sig; // gamma R-variate-Normal Covariance 
   mat gam_Sig_inv; // inverse of gamma R-variate-Normal Covariance 
   double m0;
+  size_t min_nclu;
   
   /* --- initial values --- */
   uvec T;
@@ -79,9 +81,11 @@ private:
 
   arma::vec logPostDens(const mat& Y_k, const uvec& C_k, const uvec& N_k, Rcpp::List& particles);
     
-  Rcpp::List iter(size_t k, const umat& N, Rcpp::List& all_particles);
+  Rcpp::List iter(const size_t k, const umat& N, Rcpp::List& all_particles);
 
   void sampleT(const arma::cube& xi, const arma::cube& Omega, const arma::mat& alpha, const arma::mat& logW);
+
+  void clearNonSaves();
     
 public:
   // constructor 
@@ -94,6 +98,8 @@ public:
       Rcpp::List initParticles, bool init);
   
   Rcpp::List get_chain();
+
+  void get_chain_v2(Rcpp::List& chain, bool to_clr_saves);
 };
 
 #endif

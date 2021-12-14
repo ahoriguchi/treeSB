@@ -10,7 +10,7 @@ Rcpp::List relabel(const Rcpp::List res)
   int K = Rcpp::as<int>(prior["K"]);
   Rcout << "K=" << K << "\t";
   umat t_relabel = Rcpp::as<umat>(chain["t"]);
-  int T = t_relabel.n_rows;
+  int T = t_relabel.n_rows; 
   Rcout << "T=" << T << "\t";
   int N = t_relabel.n_cols;
   Rcout << "N=" << N << "\t";

@@ -16,8 +16,14 @@ Rcpp::List perturbedSNcpp(arma::mat Y,
 {
 	Rcpp::RNGScope scope;  
 	PMC H(Y, psiX, C, prior, pmc, state, initParticles, init);
-	
-	List chain = H.get_chain();
+	// List chain = H.get_chain();
+
+	List chain;
+	H.get_chain_v2(chain, true);
+
+	// PMC* H(Y, psiX, C, prior, pmc, state, initParticles, init);
+	// List chain = H->get_chain();
+	// delete H;  // H is not needed again and is likely very large.
 	
 	// List data = Rcpp::List::create(  
 	//   Rcpp::Named( "Y" ) = Y,

@@ -2,17 +2,18 @@
 #define HELPERS_H
 
 #include "RcppArmadillo.h"
+#include <string.h>
 
 using namespace Rcpp;
 using namespace arma;
 
-arma::mat mvrnormArmaChol(int n, arma::vec mu, const arma::mat& sigmaChol);
+arma::mat mvrnormArmaChol(size_t n, const arma::vec& mu, const arma::mat& sigmaChol);
 
-arma::mat mvrnormArma(int n, arma::vec mu, arma::mat sigma);
+arma::mat mvrnormArma(size_t n, const arma::vec& mu, const arma::mat& sigma);
 
 arma::mat rWishartArmaChol(const arma::mat& SigmaChol, int df);
 
-arma::mat rWishartArma(arma::mat Sigma, int df);
+arma::mat rWishartArma(const arma::mat& Sigma, int df);
 
 double Eint( double xi, double om, double al );
 
@@ -34,12 +35,9 @@ double nrs_a_inf(double a);
 
 double rtruncnormArma(double mu, double sigma, double a);
 
-arma::vec dmvnrm_arma_precision(arma::mat x,  
-                                arma::rowvec mean,  
-                                arma::mat omega, 
-                                bool logd = true);
+arma::vec dmvnrm_arma_precision(arma::mat x, arma::rowvec mean, arma::mat omega, bool logd = true);
 
-double dIWishartArmaHelp(arma::mat& W, const double v, arma::mat& S, const bool logd = true, const double ldS=0, const double sgnS=0);
+double dIWishartArmaS(arma::mat& W, const double v, arma::mat& S, const bool logd = true, const double ldS=0, const double sgnS=0);
 
 double dIWishartArma(arma::mat& W, const double v, arma::mat& S, const bool logd = true);
 
@@ -61,5 +59,11 @@ double rPG(double b=1.0, double c=0.0);
 double rPG1z(double z);
 
 arma::colvec rpg(arma::colvec shape, arma::colvec scale);
+
+arma::colvec rpg1scale(arma::colvec scale);
+
+void print_log_det(const double ld, const double sgn, const std::string str_mat, const std::string str_fun);
+
+void add_diag_until_sympd(mat& M, const std::string my_mess);
 
 #endif
