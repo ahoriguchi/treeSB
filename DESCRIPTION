@@ -1,10 +1,10 @@
-Package: COMIX
+Package: treeSB
 Type: Package
-Title: Coarsened Mixtures of Hierarchical Skew Kernels
+Title: Covariate-Dependent Tree Stick-Breaking Mixtures
 Version: 0.1.0
-Author: S. Gorsky, C. Chan, L. Ma
-Maintainer: S. Gorsky <s.gorsky@duke.edu>
-Description: Bayesian fit of a Dirichlet Process Mixture with hierarchical multivariate skew normal kernels and coarsened posteriors.
+Author: A. Horiguchi, C. Chan, L. Ma
+Maintainer: A. Horiguchi <akira.horiguchi@duke.edu>
+Description: Bayesian fit of a covariate-dependent tree stick-breaking mixture with hierarchical multivariate skew normal kernels and coarsened posteriors.
 License: CC0
 Encoding: UTF-8
 LazyData: true

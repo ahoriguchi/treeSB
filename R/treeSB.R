@@ -1,5 +1,5 @@
 #'
-#' This function generates a sample from the posterior of COMIX.
+#' This function generates a sample from the posterior of treeSB.
 #'
 #' @param Y Matrix of the data. Each row represents an observation.
 #' @param psiX Matrix of the data covariates for weights. Each row represents an observation.
@@ -19,93 +19,95 @@
 #' \code{E0} = 0.1 * stats::cov(Y),
 #' \code{gam_mu} = rep(0, R),
 #' \code{gam_Sig} = RxR identity matrix,
-#' \code{merge_step} Introduce step to merge mixture components with small KL divergence. Default 
+#' \code{merge_step} Introduce step to merge mixture components with small KL divergence. Default
 #' is \code{merge_step = TRUE}.
 #' \code{merge_par} Parameter controlling merging radius. Default is \code{merge_par = 0.1}.
 #' @param prior A list giving the
 #' @param state A list giving the
-#' @return 
+#' @return
 #' @export
-comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
+fit_treeSB = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
 {
-	print("start of COMIX::comix()")
 	Y = as.matrix(Y)
 	psiX = as.matrix(psiX)
 	R = ncol(psiX)
 	p = ncol(Y)
-	
-	print("** start of if(is.null(prior))")
+
+	# print("** start of if (is.null(prior))")
 	# R wrapper (this code is general):
 	if (is.null(prior)) {
-		prior = list(    zeta = 1,
-           K = 10,
-           tau_a = c(1, 1),
-           m0 = ncol(Y) + 2,
-           Lambda = stats::cov(Y),
-           b0 = colMeans(Y),
-           B0 = 100 * stats::cov(Y),
-           e0 = ncol(Y) + 2,
-           E0 = 0.1 * stats::cov(Y),
-           merge_step = TRUE,
-           merge_par = 0.1)
-    } 
+		prior = list(
+			zeta = 1,
+			K = 16,
+			tau_a = c(1, 1),
+			m0 = ncol(Y) + 2,
+			Lambda = stats::cov(Y),
+			b0 = colMeans(Y),
+			B0 = 100 * stats::cov(Y),
+			e0 = ncol(Y) + 2,
+			E0 = 0.1 * stats::cov(Y),
+			merge_step = TRUE,
+			merge_par = 0.1)
+    }
     else {
-      if(is.null(prior$zeta)) 
-      prior$zeta = 1;
-      if(is.null(prior$K)) 
-      prior$K = 10;
-      if(is.null(prior$tau_a))
-      prior$tau_a = c(1, 1);
-      if(is.null(prior$Lambda))
-      prior$Lambda = stats::cov(Y);
-      if(is.null(prior$m0))
-      prior$m0 = ncol(Y) + 2;
-      if(is.null(prior$b0))
-      prior$b0 = colMeans(Y);
-      if(is.null(prior$B0))
-      prior$B0 = 100*stats::cov(Y);
-      if(is.null(prior$e0))
-      prior$e0 = ncol(Y) + 2;
-      if(is.null(prior$E0))
-      prior$E0 = 0.1 * stats::cov(Y);
-      if(is.null(prior$merge_step))
-      prior$merge_step = TRUE;
-      if(is.null(prior$merge_par))
-      prior$merge_par = 0.1;
-      if(is.null(prior$gam_mu))
-      prior$gam_mu = rep(0, R);
-      if(is.null(prior$gam_Sig))
-      prior$gam_Sig = Matrix::diag(nrow=R)*(1000/R);
-      if(is.null(prior$treestr))
-      prior$treestr = 1;  # 0 is LT; 1 is BT
-      if(is.null(prior$min_nclu))
-      prior$min_nclu = 1;  
-      if(is.null(prior$use_skew))
-      prior$use_skew = TRUE;  
+		if (is.null(prior$zeta))
+		prior$zeta = 1;
+		if (is.null(prior$K))
+		prior$K = 16;
+		if (is.null(prior$tau_a))
+		prior$tau_a = c(1, 1);
+		if (is.null(prior$Lambda))
+		prior$Lambda = stats::cov(Y);
+		if (is.null(prior$m0))
+		prior$m0 = ncol(Y) + 2;
+		if (is.null(prior$b0))
+		prior$b0 = colMeans(Y);
+		if (is.null(prior$B0))
+		prior$B0 = 100*stats::cov(Y);
+		if (is.null(prior$e0))
+		prior$e0 = ncol(Y) + 2;
+		if (is.null(prior$E0))
+		prior$E0 = 0.1 * stats::cov(Y);
+		if (is.null(prior$merge_step))
+		prior$merge_step = TRUE;
+		if (is.null(prior$merge_par))
+		prior$merge_par = 0.1;
+		if (is.null(prior$gam_mu))
+		prior$gam_mu = rep(0, R);
+		if (is.null(prior$gam_Sig))
+		prior$gam_Sig = Matrix::diag(nrow=R)*(1000/R);
+		if (is.null(prior$treestr))
+		prior$treestr = 1;  # 0 is LT; 1 is BT
+		if (is.null(prior$min_nclu))
+		prior$min_nclu = 1;
+		if (is.null(prior$to_save_wts))
+		prior$to_save_wts = FALSE;
+		if (is.null(prior$use_skew))
+		prior$use_skew = TRUE;
     }
 
 
-    print("** start of if(is.null(pmc))")
+    # print("** start of if (is.null(pmc))")
     if (is.null(pmc)) {
-      pmc = list(npart = 10, nburn = 1000, nsave = 1000, nskip = 1, ndisplay = 500)
-    } 
+		pmc = list(npart = 10, nburn = 1000, nsave = 1000, nskip = 1, ndisplay = 500)
+    }
     else {
-        if(is.null(pmc$npart))
+        if (is.null(pmc$npart))
         pmc$npart = 10
-        if(is.null(pmc$nburn))
+        if (is.null(pmc$nburn))
         pmc$nburn = 5000
-        if(is.null(pmc$nburn))
+        if (is.null(pmc$nburn))
         pmc$nburn = 5000
-        if(is.null(pmc$nsave))
+        if (is.null(pmc$nsave))
         pmc$nsave = 1000
-        if(is.null(pmc$nskip))
+        if (is.null(pmc$nskip))
         pmc$nskip = 1
-        if(is.null(pmc$ndisplay))
+        if (is.null(pmc$ndisplay))
         pmc$ndisplay = 100
     }
 
     if (prior$treestr == 1) {
-        print("** start of K=2^x")
+        # print("** start of K=2^x")
 		# rbind(1:16, sapply(1:16, function(K) 2^(floor(log2(K-0.1)) + 1)))
 		nextK = 2^(floor(log2(prior$K-0.1)) + 1)  # handle numerical approximations
 		if (prior$K != nextK) {
@@ -113,12 +115,12 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
 			prior$K = nextK
 		}
 	}
-	
-	if(is.null(state$t)) {
+
+	if (is.null(state$t)) {
 		state$t = stats::kmeans(Y, prior$K, iter.max = 100)$cluster - 1
 	}
-	
-	print("** start of length(unique(C))")
+
+	# print("** start of length(unique(C))")
 	J = length(unique(C))
 	if ( sum( sort(unique(C)) == 1:J )  != J )
 	{
@@ -126,14 +128,14 @@ comix = function(Y, psiX, C, prior = NULL, pmc = NULL, state = NULL)
 		return(0);
 	}
 	C = C - 1
-	
-	print("** start of ans = perturbedSNcpp()")
+
+	# print("** start of ans = perturbedSNcpp()")
 	ans = perturbedSNcpp(Y, psiX, C, prior, pmc, state, initParticles = NULL, init=T)
+	# print("** end of ans = perturbedSNcpp()")
 	# colnames(ans$data$Y) = colnames(Y)
 	# colnames(ans$data$psiX) = colnames(psiX)
 	# ans$data$C = ans$data$C + 1
 	ans$chain$t = ans$chain$t + 1
-	class(ans) = "COMIX"
-	print("** end of COMIX::comix() in AH")
+	class(ans) = "treeSB"
 	return(ans)
 }

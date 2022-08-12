@@ -1,0 +1,3 @@
+To install treeSB
+1. Build the changes via R CMD build treeSB-master/, which will result in a new archive file named treeSB_0.1.0.tar.gz 
+2. Install your modified archive via R CMD INSTALL treeSB_0.1.0.tar.gz 

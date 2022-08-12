@@ -7,12 +7,13 @@ using namespace arma;
 
 // [[Rcpp::export]]
 Rcpp::List perturbedSNcpp(arma::mat Y,
-							arma::mat psiX,
-							arma::uvec C,
-							Rcpp::List prior,
-							Rcpp::List pmc,
-							Rcpp::List state,
-							Rcpp::List initParticles, bool init)
+			  arma::mat psiX,
+			  arma::uvec C,
+			  Rcpp::List prior,
+			  Rcpp::List pmc,
+			  Rcpp::List state,
+			  Rcpp::List initParticles,
+			  bool init)
 {
 	Rcpp::RNGScope scope;  
 	PMC H(Y, psiX, C, prior, pmc, state, initParticles, init);

@@ -259,8 +259,8 @@ void step_six (unsigned int &step, arma::mat &cost,
                const arma::ivec &rcov, const arma::ivec &ccov, 
                const unsigned int &N) 
 {
-  // double minval = DBL_MAX;
-  double minval = DOUBLE_XMAX;
+  double minval = DBL_MAX;
+  // double minval = DOUBLE_XMAX;
   find_smallest(minval, cost, rcov, ccov, N);
   for (unsigned int r = 0; r < N; ++r) {
     for (unsigned int c = 0; c < N; ++c) {

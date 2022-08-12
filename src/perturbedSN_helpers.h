@@ -17,14 +17,14 @@ arma::mat rWishartArma(const arma::mat& Sigma, int df);
 
 double Eint( double xi, double om, double al );
 
-double KL(  arma::vec xi0_1, 
-            arma::vec xi0_2, 
-            arma::mat Omega_1, 
+double KL(  arma::vec xi0_1,
+            arma::vec xi0_2,
+            arma::mat Omega_1,
             arma::mat Omega_2,
             arma::vec alpha_1,
             arma::vec alpha_2  );
 
-arma::vec dmsnArma(arma::mat y, arma::rowvec xi, arma::mat omega, 
+arma::vec dmsnArma(arma::mat y, arma::rowvec xi, arma::mat omega,
                    arma::vec alpha, bool logd = false);
 
 int sampling(vec probs);
@@ -46,7 +46,7 @@ double dIWishartArma(arma::mat& W, const double v, arma::mat& S, const bool logd
 arma::uvec randsamp(int n, int min, int max);
 
 // void armadillo_set_seed_random();
-// 
+//
 // void armadillo_set_seed(unsigned int val);
 
 // void set_seed(unsigned int seed);
@@ -65,5 +65,13 @@ arma::colvec rpg1scale(arma::colvec scale);
 void print_log_det(const double ld, const double sgn, const std::string str_mat, const std::string str_fun);
 
 void add_diag_until_sympd(mat& M, const std::string my_mess);
+
+// void unique_rows(const arma::mat& m, arma::mat &m_uniq, arma::uvec &m_map);
+
+// arma::vec rtgamma(arma::vec a, arma::vec b, double tau0);
+
+// arma::mat makeArho(const arma::vec& rho, const arma::mat& Sig);
+
+// void matDSumI(arma::mat& m1, size_t r, size_t c, size_t n2, double tau2);
 
 #endif
